@@ -19,7 +19,7 @@ def get_all_libs():
 
 def test():
     proj = angr.Project(BIN, auto_load_libs=False)
-    jvm_ptr = jni_env_prepared(proj)
+    jvm_ptr = jni_env_prepare(proj)
     print(hex(jvm_ptr))
     # print(proj._sim_procedures)
     func_jni_onload = proj.loader.find_symbol(JNI_LOADER)
