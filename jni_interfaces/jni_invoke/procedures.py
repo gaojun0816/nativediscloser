@@ -1,23 +1,15 @@
-import claripy
 import archinfo
-from angr.procedures.java_jni import JNISimProcedure as JSP
+from ..common import JNIProcedureBase as JPB
+from ..common import JNIEnvMissingError
 
 
-
-class JNIEnvMissingError(Exception):
-    pass
-
-
-class GetEnv(JSP):
-    return_ty = 'int'
-
-    def run(self, jvm, env, version, env_ptr=None):
-        print('GetEnv', jvm)
-        if env_ptr:
-            self.state.memory.store(env, env_ptr, endness=archinfo.Endness.LE)
+class GetEnv(JPB):
+    def run(self, jvm, env, version):
+        jenv_ptr = self.state.globals.get('jenv_ptr')
+        if jenv_ptr:
+            self.state.memory.store(env, jenv_ptr, endness=archinfo.Endness.LE)
         else:
-            raise JNIEnvMissingError('Pass the JNI native function table \
-                    pointer as a kwarg with name "env_ptr"!')
-        JNI_OK = claripy.BVV(0, self.arch.bits)
-        return JNI_OK
+            raise JNIEnvMissingError('"jenv_ptr" is not stored in state. ')
+        return self.JNI_OK
+
 

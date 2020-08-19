@@ -1,4 +1,4 @@
-from .procedures import GetEnv
+from .procedures import *
 
 
 jni_invoke_interface = [

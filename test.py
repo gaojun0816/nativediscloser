@@ -1,32 +1,23 @@
-import os
 import angr
+import logging
 
-from jni_interfaces.utils import jni_env_prepare
+from jni_interfaces.utils import (jni_env_prepare_in_object,
+        jni_env_prepare_in_state)
 
 BIN = 'so4test/libnative-lib.so'
 JNI_LOADER = 'JNI_OnLoad'
 
-# create the project
-proj = angr.Project(BIN)
 
-def get_all_libs():
-    libs = list()
-    for f in os.listdir():
-        if os.path.isfile(f) and f.endswith('so'):
-            libs.append(f)
-    return libs
+# logging.disable(level=logging.CRITICAL)
 
 
 def test():
     proj = angr.Project(BIN, auto_load_libs=False)
-    jvm_ptr = jni_env_prepare(proj)
-    print(hex(jvm_ptr))
+    jvm_ptr, jenv_ptr = jni_env_prepare_in_object(proj)
     # print(proj._sim_procedures)
     func_jni_onload = proj.loader.find_symbol(JNI_LOADER)
     state = proj.factory.blank_state(addr=func_jni_onload.rebased_addr)
-    # state = proj.factory.full_init_state(addr=func_jni_onload.rebased_addr)
-    state.regs.r0 = state.solver.BVV(jvm_ptr, proj.arch.bits)
-    # state.step()
+    jni_env_prepare_in_state(state, jvm_ptr, jenv_ptr)
     simgr = proj.factory.simgr(state)
     simgr.run()
 
