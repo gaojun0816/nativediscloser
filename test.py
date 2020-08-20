@@ -2,9 +2,10 @@ import angr
 import logging
 
 from jni_interfaces.utils import (jni_env_prepare_in_object,
-        jni_env_prepare_in_state)
+        jni_env_prepare_in_state, print_records)
 
-BIN = 'so4test/libnative-lib.so'
+# BIN = 'so4test/libnative-lib.so'
+BIN = 'so4test/libcms.so'
 JNI_LOADER = 'JNI_OnLoad'
 
 
@@ -20,6 +21,7 @@ def test():
     jni_env_prepare_in_state(state, jvm_ptr, jenv_ptr)
     simgr = proj.factory.simgr(state)
     simgr.run()
+    print_records()
 
 
 if __name__ == '__main__':

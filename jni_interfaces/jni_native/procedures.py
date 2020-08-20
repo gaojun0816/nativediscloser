@@ -1,6 +1,7 @@
 import archinfo
 from ..common import JNIProcedureBase as JPB
 from ..common import JNIEnvMissingError
+from ..record import Record
 
 
 class FindClass(JPB):
@@ -21,6 +22,8 @@ class RegisterNatives(JPB):
             signature = method.signature.deref.string.concrete
             fn_ptr = method.fnPtr.long.concrete
             func_name = self.func_ptr_2_symbol_name(fn_ptr)
+            Record(cls_name, name.decode('utf-8', 'ignore'),
+                   signature.decode('utf-8', 'ignore'), fn_ptr, func_name)
         return self.JNI_OK
 
     def func_ptr_2_symbol_name(self, func_ptr):

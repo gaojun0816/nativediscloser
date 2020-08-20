@@ -4,6 +4,7 @@ from . import JNI_PROCEDURES
 from .common import NotImplementedJNIFunction
 from .jni_invoke import jni_invoke_interface as jvm
 from .jni_native import jni_native_interface as jenv
+from .record import Record
 
 
 def jni_env_prepare_in_object(proj):
@@ -56,4 +57,11 @@ def register_jni_relevant_data_type():
                               'const char* signature;' +\
                               'void* fnPtr;}'))
 
+
+def print_records():
+    header = 'invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
+             'invokee_cls, invokee_method, invokee_signature, invokee_static'
+    print(header)
+    for _, r in Record.RECORDS.items():
+        print(r)
 
