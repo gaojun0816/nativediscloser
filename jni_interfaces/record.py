@@ -14,12 +14,13 @@ class Record:
     # global records, indexed by the address of corresponding JNI function pointer
     RECORDS = dict()
 
-    def __init__(self, cls, method_name, signature, func_ptr, symbol_name):
+    def __init__(self, cls, method_name, signature, func_ptr, symbol_name, static_export=False):
         self.cls = cls
         self.method_name = method_name
         self.signature = signature
         self.func_ptr = func_ptr
         self.symbol_name = symbol_name
+        self.static_export = static_export
         self._invokees = None # list of method invoked by current native method
         Record.RECORDS.update({func_ptr: self}) # add itself to global record
 
@@ -56,7 +57,7 @@ class Record:
 
     def __str__(self):
         result = ''
-        invoker = f'{self.cls}, {self.method_name}, {self.signature}, {self.symbol_name}'
+        invoker = f'{self.cls}, {self.method_name}, {self.signature}, {self.symbol_name}, {self.static_export}'
         if self._invokees is None:
             result = invoker
         else:

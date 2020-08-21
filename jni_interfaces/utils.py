@@ -1,3 +1,4 @@
+import sys
 from angr.sim_type import register_types, parse_type
 
 from . import JNI_PROCEDURES
@@ -5,6 +6,43 @@ from .common import NotImplementedJNIFunction
 from .jni_invoke import jni_invoke_interface as jvm
 from .jni_native import jni_native_interface as jenv
 from .record import Record
+
+JNI_LOADER = 'JNI_OnLoad'
+
+
+def record_static_jni_functions(proj, cls_list):
+    """record the statically exported JNI functions
+    The strategy is to 1st find the symbol names started with 'Java',
+    2nd verify the truth of JNI function by check the class part of the name
+    with classes in the 'cls_list' which is from dex files of the APK.
+    """
+    for s in proj.loader.symbols:
+        if s.name.startswith('Java'):
+            cls_name, method_name = extract_names(s.name)
+            if cls_name in cls_list:
+                func_ptr = s.rebased_addr
+                Record(cls_name, method_name, None, func_ptr, s.name, True)
+
+
+def extract_names(symbol):
+    """Extract class and method name from exported JNI function symbol name
+    The assumption is that the pattern of the exported JNI function symbol is
+    1. start with 'Java', 2. followed by the seperated full class name 3. end
+    with the method name, 4. all parts are seperated by '_'.
+    """
+    parts = symbol.split('_')
+    method_name = parts[-1]
+    cls_name = '.'.join(parts[1:-1])
+    return cls_name, method_name
+
+
+def record_dynamic_jni_functions(proj):
+    jvm_ptr, jenv_ptr = jni_env_prepare_in_object(proj)
+    func_jni_onload = proj.loader.find_symbol(JNI_LOADER)
+    state = proj.factory.blank_state(addr=func_jni_onload.rebased_addr)
+    jni_env_prepare_in_state(state, jvm_ptr, jenv_ptr)
+    simgr = proj.factory.simgr(state)
+    simgr.run()
 
 
 def jni_env_prepare_in_object(proj):
@@ -58,10 +96,15 @@ def register_jni_relevant_data_type():
                               'void* fnPtr;}'))
 
 
-def print_records():
+def print_records(file=sys.stdout):
     header = 'invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
+             'invoker_static_export, ' +\
              'invokee_cls, invokee_method, invokee_signature, invokee_static'
-    print(header)
+    print(header, file=file)
     for _, r in Record.RECORDS.items():
-        print(r)
+        print(r, file=file)
+
+
+def clean_records():
+    Record.RECORDS = dict()
 
