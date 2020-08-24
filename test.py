@@ -3,8 +3,10 @@ import cle
 import logging
 from androguard.misc import AnalyzeAPK
 
+from jni_interfaces.record import Record
 from jni_interfaces.utils import (record_static_jni_functions, clean_records,
-        record_dynamic_jni_functions, print_records, JNI_LOADER)
+        record_dynamic_jni_functions, print_records, analyze_jni_function,
+        jni_env_prepare_in_object, JNI_LOADER)
 
 APK = 'so4test/app-release.apk'
 BIN = 'so4test/libnative-lib.so'
@@ -22,10 +24,11 @@ def run():
         for n in zf.namelist():
             if n.startswith(SO_DIR) and n.endswith('.so'):
                 with zf.open(n) as so_file:
-                    find_all_jni_functions(so_file, class_names)
+                    proj, jvm, jenv = find_all_jni_functions(so_file, class_names)
+                    for jni_func in Record.RECORDS.keys():
+                        analyze_jni_function(jni_func, proj, jvm, jenv)
                     print('='*50, n)
                     print_records()
-                    #TODO analysis jni functions for cross invocations
 
 
 def refactor_cls_name(raw_name):
@@ -35,10 +38,12 @@ def refactor_cls_name(raw_name):
 def find_all_jni_functions(so_file, class_names):
     cle_loader = cle.loader.Loader(so_file, auto_load_libs=False)
     proj = angr.Project(cle_loader)
+    jvm_ptr, jenv_ptr = jni_env_prepare_in_object(proj)
     clean_records()
     record_static_jni_functions(proj, class_names)
     if proj.loader.find_symbol(JNI_LOADER):
-        record_dynamic_jni_functions(proj)
+        record_dynamic_jni_functions(proj, jvm_ptr, jenv_ptr)
+    return proj, jvm_ptr, jenv_ptr
 
 
 if __name__ == '__main__':

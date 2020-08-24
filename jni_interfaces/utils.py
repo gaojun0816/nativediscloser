@@ -36,11 +36,8 @@ def extract_names(symbol):
     return cls_name, method_name
 
 
-def record_dynamic_jni_functions(proj):
-    jvm_ptr, jenv_ptr = jni_env_prepare_in_object(proj)
-    func_jni_onload = proj.loader.find_symbol(JNI_LOADER)
-    state = proj.factory.blank_state(addr=func_jni_onload.rebased_addr)
-    jni_env_prepare_in_state(state, jvm_ptr, jenv_ptr)
+def record_dynamic_jni_functions(proj, jvm_ptr, jenv_ptr):
+    state = get_prepared_jni_onload_state(proj, jvm_ptr, jenv_ptr)
     simgr = proj.factory.simgr(state)
     simgr.run()
 
@@ -70,7 +67,6 @@ def try_2_hook(jni_func_name, proj, addr):
 
 
 def jni_env_prepare_in_state(state, jvm_ptr, jenv_ptr):
-    state.regs.r0 = state.solver.BVV(jvm_ptr, state.project.arch.bits)
     # store JVM and JENV pointer on the state for global use
     state.globals['jvm_ptr'] = jvm_ptr
     state.globals['jni_invoke_interface'] = jvm
@@ -89,6 +85,23 @@ def jni_env_prepare_in_state(state, jvm_ptr, jenv_ptr):
                            endness=state.project.arch.memory_endness)
 
 
+def get_prepared_jni_onload_state(proj, jvm_ptr, jenv_ptr):
+    func_jni_onload = proj.loader.find_symbol(JNI_LOADER)
+    state = proj.factory.blank_state(addr=func_jni_onload.rebased_addr)
+    state.regs.r0 = state.solver.BVV(jvm_ptr, state.arch.bits)
+    jni_env_prepare_in_state(state, jvm_ptr, jenv_ptr)
+    return state
+
+
+def analyze_jni_function(func_addr, proj, jvm_ptr, jenv_ptr):
+    state = proj.factory.blank_state(addr=func_addr)
+    state.regs.r0 = state.solver.BVV(jenv_ptr, state.arch.bits)
+    state.globals['func_ptr'] = func_addr
+    jni_env_prepare_in_state(state, jvm_ptr, jenv_ptr)
+    simgr = proj.factory.simgr(state)
+    simgr.run()
+
+
 def register_jni_relevant_data_type():
     register_types(parse_type('struct JNINativeMethod ' +\
                               '{const char* name;' +\
@@ -99,7 +112,8 @@ def register_jni_relevant_data_type():
 def print_records(file=sys.stdout):
     header = 'invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
              'invoker_static_export, ' +\
-             'invokee_cls, invokee_method, invokee_signature, invokee_static'
+             'invokee_cls, invokee_method, invokee_signature, invokee_static, ' +\
+             'invokee_desc'
     print(header, file=file)
     for _, r in Record.RECORDS.items():
         print(r, file=file)

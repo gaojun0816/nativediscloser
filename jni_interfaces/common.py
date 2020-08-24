@@ -35,13 +35,19 @@ class JNIProcedureBase(SimProcedure):
 
         return "".join(chars)
 
-    def create_java_class(self, cls_name, fields=dict(), init=False):
+    def create_java_class(self, cls_name, init=False, desc=None):
         ref = self.state.project.loader.extern_object.allocate()
-        jcls = JavaClass(cls_name, fields, init)
+        jcls = JavaClass(cls_name, init, desc)
         self.state.globals[ref] = jcls
         return ref
 
-    def get_java_class(self, raw_ref):
+    def create_java_method_ID(self, cls, name, signature, static=False):
+        ref = self.state.project.loader.extern_object.allocate()
+        jmethod = JavaMethod(cls, name, signature, static)
+        self.state.globals[ref] = jmethod
+        return ref
+
+    def get_ref(self, raw_ref):
         ref = self.state.solver.eval(raw_ref)
         return self.state.globals.get(ref)
 
@@ -82,10 +88,18 @@ class NotImplementedJNIFunction(JNIProcedureBase):
 
 
 class JavaClass:
-    def __init__(self, name, fields=dict(), init=False):
+    def __init__(self, name, init=False, desc=None):
         self.name = name
-        self.fields = fields
         self.init = init
+        self.desc = desc
+
+
+class JavaMethod:
+    def __init__(self, cls, name, signature, static=False):
+        self.cls = cls
+        self.name = name
+        self.signature = signature
+        self.static = static
 
 
 class JNIEnvMissingError(Exception):

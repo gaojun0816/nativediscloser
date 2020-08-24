@@ -1,21 +1,25 @@
 
 class Invokee:
-    def __init__(self, cls, method_name, signature):
-        self.cls = cls
-        self.method_name = method_name
-        self.signature = signature
-        self._static = None
+    def __init__(self, method):
+        self.cls_name = method.cls.name
+        self.desc = method.cls.desc
+        self.method_name = method.name
+        self.signature = method.signature
+        self._static = method.static
 
     def __str__(self):
-        return f'{self.cls}, {self.method_name}, {self.signature}, {self._static}'
+        s = f'{self.cls_name}, {self.method_name}, {self.signature}, {self._static}'
+        if self.desc:
+            s += f', {self.desc}'
+        return s
 
 
 class Record:
     # global records, indexed by the address of corresponding JNI function pointer
     RECORDS = dict()
 
-    def __init__(self, cls, method_name, signature, func_ptr, symbol_name, static_export=False):
-        self.cls = cls
+    def __init__(self, cls_name, method_name, signature, func_ptr, symbol_name, static_export=False):
+        self.cls = cls_name
         self.method_name = method_name
         self.signature = signature
         self.func_ptr = func_ptr
@@ -24,7 +28,7 @@ class Record:
         self._invokees = None # list of method invoked by current native method
         Record.RECORDS.update({func_ptr: self}) # add itself to global record
 
-    def add_invokee(self, *param):
+    def add_invokee(self, param):
         """Add the Java invokee method information
         The invokee is a Java method invoked by current native function.
 
@@ -34,14 +38,10 @@ class Record:
                 of the method.
         """
         invokee = None
-        if len(param) == 1:
-            invokee, = param
-            if not isinstance(invokee, Invokee):
-                raise TypeError('Invokee of Record should be an instance of class Invokee')
-        elif len(param) == 3:
-            invokee = Invokee(*param)
+        if isinstance(param, Invokee):
+            invokee = param
         else:
-            raise TypeError('Parameters should have length of 1 or 3')
+            invokee = Invokee(param)
         if self._invokees is None:
             self._invokees = list()
         self._invokees.append(invokee)
