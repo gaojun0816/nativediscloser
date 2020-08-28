@@ -48,6 +48,12 @@ class JNIProcedureBase(SimProcedure):
         self.state.globals[ref] = jmethod
         return ref
 
+    def create_java_field_ID(self, cls, name, ftype, static=False):
+        ref = self.state.project.loader.extern_object.allocate()
+        jfield = JavaField(cls, name, ftype, static)
+        self.state.globals[ref] = jfield
+        return ref
+
     def get_ref(self, raw_ref):
         ref = self.state.solver.eval(raw_ref)
         return self.state.globals.get(ref)
@@ -94,6 +100,13 @@ class JavaClass:
         self.init = init
         self.desc = desc
         self.is_array = is_array
+
+
+class JavaField:
+    def __init__(self, cls, name, ftype):
+        self.cls = cls
+        self.name = name
+        self.ftype = ftype
 
 
 class JavaMethod:

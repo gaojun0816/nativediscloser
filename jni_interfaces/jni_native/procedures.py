@@ -3,10 +3,385 @@ from ..common import JNIProcedureBase as JPB
 from ..common import JNIEnvMissingError
 from ..record import Record
 
-class FindClass(JPB):
+
+class GetClass(JPB):
     def run(self, env_ptr, cls_name_ptr):
         cls_name = self.load_string_from_memory(cls_name_ptr)
         return self.create_java_class(cls_name)
+
+
+class DefineClass(GetClass):
+    pass
+
+
+class FindClass(GetClass):
+    pass
+
+
+class NewRef(JPB):
+    def run(self, env_ptr, obj_ptr):
+        return obj_ptr
+
+
+class NewGlobalRef(NewRef):
+    pass
+
+
+class NewLocalRef(NewRef):
+    pass
+
+
+class AllocObject(NewRef):
+    pass
+
+
+class NewObject(NewRef):
+    pass
+
+
+class NewObjectV(NewRef):
+    pass
+
+
+class NewObjectA(NewRef):
+    pass
+
+
+class GetObjectClass(JPB):
+    def run(self, env, obj_ptr):
+        obj = self.get_ref(obj_ptr)
+        if obj is None:
+            desc = 'jclass obtained via "GetObjectClass" and cannot be parsed'
+            return self.create_java_class(None, desc=desc)
+        else:
+            return obj_ptr
+
+
+class GetMethodBase(JPB):
+    def run(self, env, cls_ptr, method_name_ptr, sig_ptr):
+        cls = self.get_ref(cls_ptr)
+        method_name = self.load_string_from_memory(method_name_ptr)
+        signature = self.load_string_from_memory(sig_ptr)
+        return self.create_java_method_ID(cls, method_name,
+                signature, self.is_static())
+
+    def is_static(self):
+        raise NotImplementedError('"is_static" need to be implemented!')
+
+
+class GetStaticMethodID(GetMethodBase):
+    def is_static(self):
+        return True
+
+
+class GetMethodID(GetMethodBase):
+    def is_static(self):
+        return False
+
+
+class GetFieldID(JPB):
+    def run(self, env_ptr, cls_ptr, field_name_ptr, sig_ptr):
+        cls = self.get_ref(cls_ptr)
+        name = self.load_string_from_memory(field_name_ptr)
+        signature = self.load_string_from_memory(sig_ptr)
+        return self.create_java_field_ID(cls, name, signature)
+
+
+class GetStaticFieldID(GetFieldID):
+    pass
+
+
+class GetObjectField(JPB):
+    def run(self, env_ptr, _, field_ptr):
+        field = self.get_ref(field_ptr)
+        return self.create_java_class(field.ftype.strip('L;').replace('/', '.'),
+                                      init=True)
+
+
+class GetStaticObjectField(GetObjectField):
+    pass
+
+
+class CallMethodBase(JPB):
+    def run(self, env, _, method_ptr):
+        method = self.get_ref(method_ptr)
+        record = self.get_current_record()
+        record.add_invokee(method)
+        return_value = self.get_return_value(method)
+        if return_value:
+            return return_value
+
+    def get_current_record(self):
+        func_ptr = self.state.globals.get('func_ptr')
+        return Record.RECORDS.get(func_ptr)
+
+    def get_return_value(self, method):
+        raise NotImplementedError('Extending CallMethodBase without implement get_return_value!')
+
+
+class CallPrimaryMethod(CallMethodBase):
+    def get_return_value(self, method):
+        return self.state.solver.BVS('primary_value', self.arch.bits)
+
+class CallBooleanMethod(CallPrimaryMethod):
+    pass
+
+
+class CallBooleanMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallBooleanMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallByteMethod(CallPrimaryMethod):
+    pass
+
+
+class CallByteMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallByteMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallCharMethod(CallPrimaryMethod):
+    pass
+
+
+class CallCharMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallCharMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallShortMethod(CallPrimaryMethod):
+    pass
+
+
+class CallShortMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallShortMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallIntMethod(CallPrimaryMethod):
+    pass
+
+
+class CallIntMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallIntMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallLongMethod(CallPrimaryMethod):
+    pass
+
+
+class CallLongMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallLongMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallFloatMethod(CallPrimaryMethod):
+    pass
+
+
+class CallFloatMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallFloatMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallDoubleMethod(CallPrimaryMethod):
+    pass
+
+
+class CallDoubleMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallDoubleMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallStaticBooleanMethod(CallPrimaryMethod):
+    pass
+
+
+class CallStaticBooleanMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallStaticBooleanMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallStaticByteMethod(CallPrimaryMethod):
+    pass
+
+
+class CallStaticByteMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallStaticByteMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallStaticCharMethod(CallPrimaryMethod):
+    pass
+
+
+class CallStaticCharMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallStaticCharMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallStaticShortMethod(CallPrimaryMethod):
+    pass
+
+
+class CallStaticShortMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallStaticShortMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallStaticIntMethod(CallPrimaryMethod):
+    pass
+
+
+class CallStaticIntMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallStaticIntMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallStaticLongMethod(CallPrimaryMethod):
+    pass
+
+
+class CallStaticLongMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallStaticLongMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallStaticFloatMethod(CallPrimaryMethod):
+    pass
+
+
+class CallStaticFloatMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallStaticFloatMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallStaticDoubleMethod(CallPrimaryMethod):
+    pass
+
+
+class CallStaticDoubleMethodV(CallPrimaryMethod):
+    pass
+
+
+class CallStaticDoubleMethodA(CallPrimaryMethod):
+    pass
+
+
+class CallVoidMethod(CallMethodBase):
+    def get_return_value(self, method):
+        return None
+
+
+class CallVoidMethodV(CallVoidMethod):
+    pass
+
+
+class CallVoidMethodA(CallVoidMethod):
+    pass
+
+
+class CallStaticVoidMethod(CallMethodBase):
+    pass
+
+
+class CallStaticVoidMethodV(CallVoidMethod):
+    pass
+
+
+class CallStaticVoidMethodA(CallVoidMethod):
+    pass
+
+
+class CallObjectMethod(CallMethodBase):
+    def get_return_value(self, method):
+        rtype = method.get_return_type().strip('L;').replace('/', '.')
+        return self.create_java_class(rtype, init=True)
+
+
+class CallObjectMethodV(CallObjectMethod):
+    pass
+
+
+class CallObjectMethodA(CallObjectMethod):
+    pass
+
+
+class CallStaticVoidMethod(CallVoidMethod):
+    pass
+
+
+class CallStaticVoidMethodV(CallVoidMethod):
+    pass
+
+
+class CallStaticVoidMethodA(CallVoidMethod):
+    pass
+
+
+class NewObjectArray(JPB):
+    def run(self, env_ptr, size, cls_ptr, obj_ptr):
+        # simply use the one of the element
+        return obj_ptr
+
+
+class GetObjectArrayElement(JPB):
+    def run(self, env_ptr, array_ptr, index):
+        # As we simplied, the array is the element
+        return array_ptr
+
+
+class SetObjectArrayElement(JPB):
+    def run(self, env_ptr, array_ptr, index, elememt_ptr):
+        # to simplify, nothing need to be done.
+        pass
 
 
 class RegisterNatives(JPB):
@@ -122,78 +497,4 @@ class RegisterNatives(JPB):
         return cls_name, method_name, signature, is_static_method, obfuscated
 
 
-class GetObjectClass(JPB):
-    def run(self, env, obj_ptr):
-        obj = self.get_ref(obj_ptr)
-        if obj is None:
-            desc = 'jclass obtained via "GetObjectClass" and cannot be parsed'
-            return self.create_java_class(None, desc=desc)
-        else:
-            return obj_ptr
 
-
-class GetMethodBase(JPB):
-    def run(self, env, cls_ptr, method_name_ptr, sig_ptr):
-        cls = self.get_ref(cls_ptr)
-        method_name = self.load_string_from_memory(method_name_ptr)
-        signature = self.load_string_from_memory(sig_ptr)
-        return self.create_java_method_ID(cls, method_name,
-                signature, self.is_static())
-
-    def is_static(self):
-        raise NotImplementedError('"is_static" need to be implemented!')
-
-
-class GetStaticMethodID(GetMethodBase):
-    def is_static(self):
-        return True
-
-
-class GetMethodID(GetMethodBase):
-    def is_static(self):
-        return False
-
-
-class CallMethodBase(JPB):
-    def run(self, env, _, method_ptr):
-        method = self.get_ref(method_ptr)
-        record = self.get_current_record()
-        record.add_invokee(method)
-        return_value = self.get_return_value(method)
-        if return_value:
-            return return_value
-
-    def get_current_record(self):
-        func_ptr = self.state.globals.get('func_ptr')
-        return Record.RECORDS.get(func_ptr)
-
-    def get_return_value(self, method):
-        raise NotImplementedError('Extending CallMethodBase without implement get_return_value!')
-
-
-class CallPrimeMethod(CallMethodBase):
-    def get_return_value(self, method):
-        return self.state.solver.BVS('prime_value', self.arch.bits)
-
-
-class CallVoidMethod(CallMethodBase):
-    def get_return_value(self, method):
-        return None
-
-
-class CallObjectMethod(CallMethodBase):
-    def get_return_value(self, method):
-        rtype = method.get_return_type().strip('L;').replace('/', '.')
-        return self.create_java_class(rtype, init=True)
-
-
-class CallObjectMethodV(CallObjectMethod):
-    pass
-
-
-class CallStaticVoidMethod(CallVoidMethod):
-    pass
-
-
-class CallStaticVoidMethodV(CallVoidMethod):
-    pass
