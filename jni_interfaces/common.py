@@ -1,3 +1,4 @@
+import re
 import logging
 import itertools
 from angr import SimProcedure
@@ -88,10 +89,11 @@ class NotImplementedJNIFunction(JNIProcedureBase):
 
 
 class JavaClass:
-    def __init__(self, name, init=False, desc=None):
+    def __init__(self, name, init=False, desc=None, is_array=False):
         self.name = name
         self.init = init
         self.desc = desc
+        self.is_array = is_array
 
 
 class JavaMethod:
@@ -100,6 +102,10 @@ class JavaMethod:
         self.name = name
         self.signature = signature
         self.static = static
+
+    def get_return_type(self):
+        pat = r'^\([\w\d[/;$]*\)(?P<rtype>[\w\d[/;$]+)$'
+        return re.match(pat, self.signature).group('rtype')
 
 
 class JNIEnvMissingError(Exception):
