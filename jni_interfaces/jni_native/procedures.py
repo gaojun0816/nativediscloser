@@ -106,7 +106,9 @@ class CallMethodBase(JPB):
     def run(self, env, _, method_ptr):
         method = self.get_ref(method_ptr)
         record = self.get_current_record()
-        record.add_invokee(method)
+        # record could be None when CallMethod function called in JNI_OnLoad
+        if record is not None:
+            record.add_invokee(method)
         return_value = self.get_return_value(method)
         if return_value:
             return return_value
@@ -354,15 +356,15 @@ class CallObjectMethodA(CallObjectMethod):
     pass
 
 
-class CallStaticVoidMethod(CallVoidMethod):
+class CallStaticObjectMethod(CallObjectMethod):
     pass
 
 
-class CallStaticVoidMethodV(CallVoidMethod):
+class CallStaticObjectMethodV(CallObjectMethod):
     pass
 
 
-class CallStaticVoidMethodA(CallVoidMethod):
+class CallStaticObjectMethodA(CallObjectMethod):
     pass
 
 
@@ -419,80 +421,81 @@ class RegisterNatives(JPB):
         dex = self.state.globals.get('dex')
         if dex is None:
             obfuscated = None
-        ms = list(dex.find_methods(f'L{cls_name};', method_name))
-        if len(ms) == 0:
-            # cls or/and method name are obfuscated situation
-            obfuscated = True
-            cs = dex.find_classes(f'L{cls_name};')
-            ms = dex.find_methods(methodname=method_name)
-            if len(cs) == 0 and len(ms) == 0:
-                # all obfuscated, nothing can be improved.
-                pass
-            elif len(cs) == 0:
-                # class name obfuscated
-                if len(ms) == 1:
-                    cls_name = ms[0].get_method().get_class_name()
+        else:
+            ms = list(dex.find_methods(f'L{cls_name};', method_name))
+            if len(ms) == 0:
+                # cls or/and method name are obfuscated situation
+                obfuscated = True
+                cs = dex.find_classes(f'L{cls_name};')
+                ms = dex.find_methods(methodname=method_name)
+                if len(cs) == 0 and len(ms) == 0:
+                    # all obfuscated, nothing can be improved.
+                    pass
+                elif len(cs) == 0:
+                    # class name obfuscated
+                    if len(ms) == 1:
+                        cls_name = ms[0].get_method().get_class_name()
+                        signature = ms[0].descriptor
+                        if 'static' in ms[0].access:
+                            is_static_method = True
+                        else:
+                            is_static_method = False
+                    else:
+                        # more than one method found base on method name
+                        classes = set()
+                        sigs = set()
+                        static_count = 0
+                        for m in ms:
+                            classes.add(m.get_method().get_class_name())
+                            sigs.add(m.descriptor)
+                            if 'static' in m.access:
+                                static_count += 1
+                        if len(classes) == 1:
+                            # all in one class, so we can sure the class name
+                            cls_name, = classes
+                        if len(sigs) == 1:
+                            # all have same signature, so we can sure the signature
+                            signature, = sigs
+                        if static_count == 0:
+                            is_static_method = False
+                        elif static_count == len(ms):
+                            is_static_method = True
+                else:
+                    # method name obfuscated
+                    pass
+            elif len(ms) == 1:
+                if signature != ms[0].descriptor:
+                    obfuscated = True
                     signature = ms[0].descriptor
-                    if 'static' in ms[0].access:
+                if 'static' in ms[0].access:
+                    is_static_method = True
+                else:
+                    is_static_method = False
+            else:
+                # method overload situation
+                found = False
+                static_count = 0
+                for m in ms:
+                    if m.descriptor == signature:
+                        found = True
+                        break
+                    if 'static' in m.access:
+                        static_count += 1
+                if found:
+                    if 'static' in m.access:
                         is_static_method = True
                     else:
                         is_static_method = False
                 else:
-                    # more than one method found base on method name
-                    classes = set()
-                    sigs = set()
-                    static_count = 0
-                    for m in ms:
-                        classes.add(m.get_method().get_class_name())
-                        sigs.add(m.descriptor)
-                        if 'static' in m.access:
-                            static_count += 1
-                    if len(classes) == 1:
-                        # all in one class, so we can sure the class name
-                        cls_name, = classes
-                    if len(sigs) == 1:
-                        # all have same signature, so we can sure the signature
-                        signature, = sigs
+                    # Since signature is obfuscated and we are not sure the exact one
+                    # So the obfuscated signature will be returned.
+                    obfuscated = True
                     if static_count == 0:
+                        # since no method is static so we can sure
                         is_static_method = False
                     elif static_count == len(ms):
+                        # since all methods are static so we can sure
                         is_static_method = True
-            else:
-                # method name obfuscated
-                pass
-        elif len(ms) == 1:
-            if signature != ms[0].descriptor:
-                obfuscated = True
-                signature = ms[0].descriptor
-            if 'static' in ms[0].access:
-                is_static_method = True
-            else:
-                is_static_method = False
-        else:
-            # method overload situation
-            found = False
-            static_count = 0
-            for m in ms:
-                if m.descriptor == signature:
-                    found = True
-                    break
-                if 'static' in m.access:
-                    static_count += 1
-            if found:
-                if 'static' in m.access:
-                    is_static_method = True
-                else:
-                    is_static_method = False
-            else:
-                # Since signature is obfuscated and we are not sure the exact one
-                # So the obfuscated signature will be returned.
-                obfuscated = True
-                if static_count == 0:
-                    # since no method is static so we can sure
-                    is_static_method = False
-                elif static_count == len(ms):
-                    # since all methods are static so we can sure
-                    is_static_method = True
         cls_name = cls_name.strip('L;').replace('/', '.')
         return cls_name, method_name, signature, is_static_method, obfuscated
 
