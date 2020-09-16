@@ -2,6 +2,7 @@ import sys
 import re
 from claripy import BVS
 from angr.sim_type import register_types, parse_type
+from angr.exploration_techniques import LengthLimiter
 
 from . import JNI_PROCEDURES
 from .common import NotImplementedJNIFunction, JavaClass
@@ -69,7 +70,9 @@ def extract_names(symbol):
 
 def record_dynamic_jni_functions(proj, jvm_ptr, jenv_ptr, dex=None):
     state = get_prepared_jni_onload_state(proj, jvm_ptr, jenv_ptr, dex)
+    tech = LengthLimiter(100)
     simgr = proj.factory.simgr(state)
+    simgr.use_technique(tech)
     simgr.run()
 
 
@@ -132,7 +135,9 @@ def analyze_jni_function(func_addr, proj, jvm_ptr, jenv_ptr, dex=None):
     for k, v in updates.items():
         state.globals[k] = v
     jni_env_prepare_in_state(state, jvm_ptr, jenv_ptr, dex)
+    tech = LengthLimiter(15)
     simgr = proj.factory.simgr(state)
+    simgr.use_technique(tech)
     simgr.run()
 
 
@@ -255,9 +260,10 @@ def print_records(file=sys.stdout):
              'invoker_static_export, ' +\
              'invokee_cls, invokee_method, invokee_signature, invokee_static, ' +\
              'invokee_desc'
-    print(header, file=file)
-    for _, r in Record.RECORDS.items():
-        print(r, file=file)
+    if len(Record.RECORDS) > 0:
+        print(header, file=file)
+        for _, r in Record.RECORDS.items():
+            print(r, file=file)
 
 
 def clean_records():
