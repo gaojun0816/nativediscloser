@@ -1,7 +1,12 @@
+import logging
 import archinfo
 from ..common import JNIProcedureBase as JPB
 from ..common import JNIEnvMissingError
 from ..record import Record
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class GetClass(JPB):
@@ -108,7 +113,11 @@ class CallMethodBase(JPB):
         record = self.get_current_record()
         # record could be None when CallMethod function called in JNI_OnLoad
         if record is not None:
-            record.add_invokee(method)
+            if method is None:
+                logger.warning(f'{self.__class__} received method pointer:' +\
+                        f'{method_ptr} without corresponding method instance')
+            else:
+                record.add_invokee(method)
         return_value = self.get_return_value(method)
         if return_value:
             return return_value

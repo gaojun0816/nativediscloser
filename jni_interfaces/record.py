@@ -1,8 +1,8 @@
 
 class Invokee:
     def __init__(self, method):
-        self.cls_name = method.cls.name
-        self.desc = method.cls.desc
+        self.cls_name = method.cls.name if method.cls is not None else None
+        self.desc = method.cls.desc if method.cls is not None else None
         self.method_name = method.name
         self.signature = method.signature
         self._static = method.static
