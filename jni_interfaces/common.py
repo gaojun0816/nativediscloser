@@ -50,7 +50,7 @@ class JNIProcedureBase(SimProcedure):
 
     def create_java_field_ID(self, cls, name, ftype, static=False):
         ref = self.state.project.loader.extern_object.allocate()
-        jfield = JavaField(cls, name, ftype, static)
+        jfield = JavaField(cls, name, ftype)
         self.state.globals[ref] = jfield
         return ref
 
