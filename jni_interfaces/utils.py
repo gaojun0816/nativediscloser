@@ -255,17 +255,24 @@ def register_jni_relevant_data_type():
                               'void* fnPtr;}'))
 
 
-def print_records(file=sys.stdout):
+def print_records(fname=None):
     header = 'invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
              'invoker_static_export, ' +\
              'invokee_cls, invokee_method, invokee_signature, invokee_static, ' +\
              'invokee_desc'
     if len(Record.RECORDS) > 0:
-        print(header, file=file)
+        f = None
+        if fname is None:
+            f = sys.stdout
+        else:
+            f = open(fname, 'w')
+        print(header, file=f)
         for _, r in Record.RECORDS.items():
-            print(r, file=file)
+            print(r, file=f)
+        if fname is not None:
+            f.close()
 
 
 def clean_records():
-    Record.RECORDS = dict()
+    Record.RECORDS.clear()
 
