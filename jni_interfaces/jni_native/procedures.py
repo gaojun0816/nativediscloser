@@ -99,7 +99,11 @@ class GetStaticFieldID(GetFieldID):
 class GetObjectField(JPB):
     def run(self, env_ptr, _, field_ptr):
         field = self.get_ref(field_ptr)
-        return self.create_java_class(field.ftype.strip('L;').replace('/', '.'),
+        if field is None:
+            desc = 'jobject obtained via GetObjectField which failed to parse'
+            return self.create_java_class(None, init=True, desc=desc)
+        else:
+            return self.create_java_class(field.ftype.strip('L;').replace('/', '.'),
                                       init=True)
 
 
@@ -353,6 +357,9 @@ class CallStaticVoidMethodA(CallVoidMethod):
 
 class CallObjectMethod(CallMethodBase):
     def get_return_value(self, method):
+        # for complex code structure, method may not be able to parse.
+        if method is None:
+            return None
         rtype = method.get_return_type().strip('L;').replace('/', '.')
         return self.create_java_class(rtype, init=True)
 
@@ -435,8 +442,8 @@ class RegisterNatives(JPB):
             if len(ms) == 0:
                 # cls or/and method name are obfuscated situation
                 obfuscated = True
-                cs = dex.find_classes(f'L{cls_name};')
-                ms = dex.find_methods(methodname=method_name)
+                cs = list(dex.find_classes(f'L{cls_name};'))
+                ms = list(dex.find_methods(methodname=method_name))
                 if len(cs) == 0 and len(ms) == 0:
                     # all obfuscated, nothing can be improved.
                     pass
