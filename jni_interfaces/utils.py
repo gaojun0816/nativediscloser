@@ -128,7 +128,7 @@ def get_prepared_jni_onload_state(proj, jvm_ptr, jenv_ptr, dex=None):
     return state
 
 
-def analyze_jni_function(func_addr, proj, jvm_ptr, jenv_ptr, dex=None):
+def analyze_jni_function(func_addr, proj, jvm_ptr, jenv_ptr, dex=None, returns=None):
     func_params, updates = get_jni_function_params(proj, func_addr, jenv_ptr)
     state = proj.factory.call_state(func_addr, *func_params)
     state.globals['func_ptr'] = func_addr
@@ -139,6 +139,11 @@ def analyze_jni_function(func_addr, proj, jvm_ptr, jenv_ptr, dex=None):
     simgr = proj.factory.simgr(state)
     simgr.use_technique(tech)
     simgr.run()
+    # for multiprocess running.
+    if returns is not None:
+        invokees = Record.RECORDS.get(func_addr).get_invokees()
+        if invokees is not None:
+            returns.update({func_addr: invokees})
 
 
 def get_jni_function_params(proj, func_addr, jenv_ptr):

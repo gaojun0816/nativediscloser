@@ -58,6 +58,9 @@ class Record:
             num = len(self._invokees)
         return num
 
+    def get_invokees(self):
+        return self._invokees
+
     def __str__(self):
         result = ''
         invoker = f'{self.cls}, {self.method_name}, {self.signature}, {self.symbol_name}, {self.static_export}'
