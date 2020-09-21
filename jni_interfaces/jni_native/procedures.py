@@ -404,20 +404,26 @@ class SetObjectArrayElement(JPB):
 
 class RegisterNatives(JPB):
     def run(self, env, cls_ptr, methods, method_num):
-        cls_name = self.get_ref(cls_ptr).name
-        num = self.state.solver.eval(method_num)
-        methods_ptr = self.state.solver.eval(methods)
-        for i in range(num):
-            ptr = methods_ptr + i * 3 * self.arch.bits // 8
-            method = self.state.mem[ptr].struct.JNINativeMethod
-            name = method.name.deref.string.concrete
-            signature = method.signature.deref.string.concrete
-            fn_ptr = method.fnPtr.long.concrete
-            symbol = self.func_ptr_2_symbol_name(fn_ptr)
-            c, m, s, static, obfuscated = self._dex_heuristic(cls_name,
-                    name.decode('utf-8', 'ignore'),
-                    signature.decode('utf-8', 'ignore'))
-            Record(c, m, s, fn_ptr, symbol, static, obfuscated)
+        # Exceptions could happen deal to unknown reasons (e.g., value passing
+        # via customized structures). Use exception catching to avoid the program
+        # from crashing.
+        try:
+            cls_name = self.get_ref(cls_ptr).name
+            num = self.state.solver.eval(method_num)
+            methods_ptr = self.state.solver.eval(methods)
+            for i in range(num):
+                ptr = methods_ptr + i * 3 * self.arch.bits // 8
+                method = self.state.mem[ptr].struct.JNINativeMethod
+                name = method.name.deref.string.concrete
+                signature = method.signature.deref.string.concrete
+                fn_ptr = method.fnPtr.long.concrete
+                symbol = self.func_ptr_2_symbol_name(fn_ptr)
+                c, m, s, static, obfuscated = self._dex_heuristic(cls_name,
+                        name.decode('utf-8', 'ignore'),
+                        signature.decode('utf-8', 'ignore'))
+                Record(c, m, s, fn_ptr, symbol, static, obfuscated)
+        except Exception as e:
+            logger.warning(f'Parsing "RegisterNatives" failed with error: {e}')
         return self.JNI_OK
 
     def func_ptr_2_symbol_name(self, func_ptr):
