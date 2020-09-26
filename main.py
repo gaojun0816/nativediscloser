@@ -18,7 +18,8 @@ from jni_interfaces.utils import (record_static_jni_functions, clean_records,
 SO_DIR = 'lib/armeabi-v7a/'
 FDROID_DIR = '../fdroid_crawler'
 NATIVE_FILE = os.path.join(FDROID_DIR, 'natives')
-OUT_DIR = 'fdroid_result'
+# OUT_DIR = 'fdroid_result'
+OUT_DIR = os.path.expandvars('$SCRATCH/native_lin')
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -105,7 +106,7 @@ def fdroid_run():
 
 
 def lineage_run():
-    lin_file = sys.argv[0]
+    lin_file = sys.argv[1]
     shas = list()
     with open(lin_file) as f:
         for l in f:
@@ -201,7 +202,7 @@ def apk_run(path, out=None, comprise=False):
     with apk.zip as zf:
         for n in zf.namelist():
             if n.startswith(SO_DIR) and n.endswith('.so'):
-                print('='*100, n)
+                # print('='*100, n)
                 with zf.open(n) as so_file, mp.Manager() as mgr:
                     returns = mgr.dict()
                     proj, jvm, jenv = find_all_jni_functions(so_file, dex)
@@ -211,7 +212,7 @@ def apk_run(path, out=None, comprise=False):
                     for jni_func, record in Record.RECORDS.items():
                         # wrap the analysis with its own process to limit the
                         # analysis time.
-                        print(record.symbol_name)
+                        # print(record.symbol_name)
                         p = mp.Process(target=analyze_jni_function,
                                 args=(*(jni_func, proj, jvm, jenv, dex, returns),))
                         p.start()
@@ -222,7 +223,7 @@ def apk_run(path, out=None, comprise=False):
                             perf.add_timeout()
                             p.terminate()
                             p.join()
-                            print('timeout')
+                            # print('timeout')
                     for addr, invokees in returns.items():
                         record = Record.RECORDS.get(addr)
                         for invokee in invokees:
@@ -252,7 +253,7 @@ def find_all_jni_functions(so_file, dex):
         clean_records()
         record_static_jni_functions(proj, dex)
         if proj.loader.find_symbol(JNI_LOADER):
-            print('record dynamic', '-'*50)
+            # print('record dynamic', '-'*50)
             record_dynamic_jni_functions(proj, jvm_ptr, jenv_ptr, dex)
     return proj, jvm_ptr, jenv_ptr
 
