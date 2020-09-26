@@ -20,7 +20,10 @@ FDROID_DIR = '../fdroid_crawler'
 NATIVE_FILE = os.path.join(FDROID_DIR, 'natives')
 OUT_DIR = 'fdroid_result'
 
-# logging.disable(level=logging.CRITICAL)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+logging.disable(level=logging.CRITICAL)
 
 
 class Performance:
@@ -77,12 +80,61 @@ class MyPool(multiprocessing.pool.Pool):
 
 def main():
     # cmd()
+    # fdroid_run()
+    lineage_run()
+    # check_duplicates()
+
+
+def check_duplicates():
     apks = get_native_apks()
+    print(len(apks))
+    names = [apk.split('/')[-1] for apk in apks]
+    duplicates = [n for n in names if names.count(n) > 1]
+    print(len(duplicates))
+    print(duplicates)
+    print(len(set(names)))
+
+
+def fdroid_run():
+    apks = get_native_apks()
+    apks = filter_out_exists(apks)
     if not os.path.exists(OUT_DIR):
         os.makedirs(OUT_DIR)
-    # with mp.Pool() as p:
     with MyPool() as p:
-        p.map(apk_run, apks[:3])
+        p.map(apk_run, apks)
+
+
+def lineage_run():
+    lin_file = sys.argv[0]
+    shas = list()
+    with open(lin_file) as f:
+        for l in f:
+            l = l.strip()
+            shas.append(l)
+    if not os.path.exists(OUT_DIR):
+        os.makedirs(OUT_DIR)
+    with MyPool() as p:
+        p.map(sha_run, shas)
+
+
+def filter_out_exists(apks):
+    if not os.path.exists(OUT_DIR):
+        return apks
+    exists = list()
+    for i in os.listdir(OUT_DIR):
+        if i.endswith('_result'):
+            exists.append(i.rstrip('_result'))
+    noexists = list()
+    for apk in apks:
+        ne = True
+        name = apk.split('/')[-1]
+        for e in exists:
+            if name.rstrip('.apk') == e:
+                ne = False
+                break
+        if ne:
+            noexists.append(apk)
+    return noexists
 
 
 def get_native_apks():
@@ -97,7 +149,6 @@ def get_native_apks():
 def cmd():
     path_2_apk, out = parse_args()
     apk_run(path_2_apk, out)
-    print_performance(out)
 
 
 def print_performance(perf, out):
@@ -125,6 +176,19 @@ def parse_args():
     return args.apk, out
 
 
+def sha_run(sha):
+    from mylib.androzoo import download
+    sucess, desc, _ = download(sha, '/tmp', False)
+    if sucess:
+        apk_run(desc)
+        try:
+            os.remove(desc)
+        except Exception as e:
+            print(f'remove {sha} failed: {e}', file=sys.stderr)
+    else:
+        print(f'download {sha} failed: {desc}', file=sys.stderr)
+
+
 def apk_run(path, out=None):
     perf = Performance()
     if out is None:
@@ -137,11 +201,13 @@ def apk_run(path, out=None):
     with apk.zip as zf:
         for n in zf.namelist():
             if n.startswith(SO_DIR) and n.endswith('.so'):
-                perf.add_analyzed_so()
                 print('='*100, n)
                 with zf.open(n) as so_file, mp.Manager() as mgr:
                     returns = mgr.dict()
                     proj, jvm, jenv = find_all_jni_functions(so_file, dex)
+                    if proj is None:
+                        continue
+                    perf.add_analyzed_so()
                     for jni_func, record in Record.RECORDS.items():
                         # wrap the analysis with its own process to limit the
                         # analysis time.
@@ -151,8 +217,7 @@ def apk_run(path, out=None):
                         p.start()
                         perf.add_analyzed_func()
                         # For analysis of each .so file, we wait for 3mins at most.
-                        # p.join(180)
-                        p.join(30)
+                        p.join(180)
                         if p.is_alive():
                             perf.add_timeout()
                             p.terminate()
@@ -173,14 +238,19 @@ def refactor_cls_name(raw_name):
 
 
 def find_all_jni_functions(so_file, dex):
-    cle_loader = cle.loader.Loader(so_file, auto_load_libs=False)
-    proj = angr.Project(cle_loader)
-    jvm_ptr, jenv_ptr = jni_env_prepare_in_object(proj)
-    clean_records()
-    record_static_jni_functions(proj, dex)
-    if proj.loader.find_symbol(JNI_LOADER):
-        print('record dynamic', '-'*50)
-        record_dynamic_jni_functions(proj, jvm_ptr, jenv_ptr, dex)
+    proj, jvm_ptr, jenv_ptr = None, None, None
+    try:
+        cle_loader = cle.loader.Loader(so_file, auto_load_libs=False)
+    except Exception as e:
+        logger.warning(f'{so_file} cause CLE loader error: {e}')
+    else:
+        proj = angr.Project(cle_loader)
+        jvm_ptr, jenv_ptr = jni_env_prepare_in_object(proj)
+        clean_records()
+        record_static_jni_functions(proj, dex)
+        if proj.loader.find_symbol(JNI_LOADER):
+            print('record dynamic', '-'*50)
+            record_dynamic_jni_functions(proj, jvm_ptr, jenv_ptr, dex)
     return proj, jvm_ptr, jenv_ptr
 
 
