@@ -1,5 +1,6 @@
 import sys
 import re
+import logging
 from claripy import BVS
 from angr.sim_type import register_types, parse_type
 from angr.exploration_techniques import LengthLimiter
@@ -11,6 +12,9 @@ from .jni_native import jni_native_interface as jenv
 from .record import Record, RecordNotFoundError
 
 JNI_LOADER = 'JNI_OnLoad'
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def record_static_jni_functions(proj, dex=None):
@@ -138,7 +142,10 @@ def analyze_jni_function(func_addr, proj, jvm_ptr, jenv_ptr, dex=None, returns=N
     tech = LengthLimiter(15)
     simgr = proj.factory.simgr(state)
     simgr.use_technique(tech)
-    simgr.run()
+    try:
+        simgr.run()
+    except Exception as e:
+        logger.warning(f'Analysis JNI function failed: {e}')
     # for multiprocess running.
     if returns is not None:
         invokees = Record.RECORDS.get(func_addr).get_invokees()
