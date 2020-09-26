@@ -180,7 +180,7 @@ def sha_run(sha):
     from mylib.androzoo import download
     sucess, desc, _ = download(sha, '/tmp', False)
     if sucess:
-        apk_run(desc)
+        apk_run(desc, comprise=True)
         try:
             os.remove(desc)
         except Exception as e:
@@ -189,7 +189,7 @@ def sha_run(sha):
         print(f'download {sha} failed: {desc}', file=sys.stderr)
 
 
-def apk_run(path, out=None):
+def apk_run(path, out=None, comprise=False):
     perf = Performance()
     if out is None:
         result_dir = path.split('/')[-1].rstrip('.apk') + '_result'
@@ -231,6 +231,9 @@ def apk_run(path, out=None):
                     print_records(os.path.join(out, file_name))
     perf.end()
     print_performance(perf, out)
+    if comprise:
+        from mylib.common import zipdir
+        zipdir(result_dir, out, OUT_DIR, True)
 
 
 def refactor_cls_name(raw_name):
