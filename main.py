@@ -80,9 +80,9 @@ class MyPool(multiprocessing.pool.Pool):
 
 
 def main():
-    # cmd()
+    cmd()
     # fdroid_run()
-    lineage_run()
+    # lineage_run()
     # check_duplicates()
 
 
