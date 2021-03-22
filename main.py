@@ -15,7 +15,7 @@ from jni_interfaces.utils import (record_static_jni_functions, clean_records,
         record_dynamic_jni_functions, print_records, analyze_jni_function,
         jni_env_prepare_in_object, JNI_LOADER)
 
-SO_DIR = 'lib/armeabi-v7a/'
+SO_DIRS = ['lib/armeabi-v7a/', 'lib/arm64-v8a/']
 FDROID_DIR = '../fdroid_crawler'
 NATIVE_FILE = os.path.join(FDROID_DIR, 'natives')
 # OUT_DIR = 'fdroid_result'
@@ -190,6 +190,15 @@ def sha_run(sha):
         print(f'download {sha} failed: {desc}', file=sys.stderr)
 
 
+def starts_with_so_dir(name):
+    itis = False
+    for so_dir in SO_DIRS:
+        if name.startswith(so_dir):
+            itis = True
+            break
+    return itis
+
+
 def apk_run(path, out=None, comprise=False):
     perf = Performance()
     if out is None:
@@ -201,7 +210,7 @@ def apk_run(path, out=None, comprise=False):
     apk, _, dex = AnalyzeAPK(path)
     with apk.zip as zf:
         for n in zf.namelist():
-            if n.startswith(SO_DIR) and n.endswith('.so'):
+            if n.endswith('.so') and starts_with_so_dir(n):
                 # print('='*100, n)
                 with zf.open(n) as so_file, mp.Manager() as mgr:
                     returns = mgr.dict()
