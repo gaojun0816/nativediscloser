@@ -24,6 +24,7 @@ OUT_DIR = os.path.expandvars('$SCRATCH/native_lin')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+# uncomment below to output log information
 logging.disable(level=logging.CRITICAL)
 
 
