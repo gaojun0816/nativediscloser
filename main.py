@@ -15,6 +15,9 @@ from jni_interfaces.utils import (record_static_jni_functions, clean_records,
         record_dynamic_jni_functions, print_records, analyze_jni_function,
         jni_env_prepare_in_object, JNI_LOADER)
 
+# the longest time in seconds to analyze 1 JNI function.
+WAIT_TIME = 180
+
 SO_DIRS = ['lib/armeabi-v7a/', 'lib/arm64-v8a/']
 FDROID_DIR = '../fdroid_crawler'
 NATIVE_FILE = os.path.join(FDROID_DIR, 'natives')
@@ -228,7 +231,7 @@ def apk_run(path, out=None, comprise=False):
                         p.start()
                         perf.add_analyzed_func()
                         # For analysis of each .so file, we wait for 3mins at most.
-                        p.join(180)
+                        p.join(WAIT_TIME)
                         if p.is_alive():
                             perf.add_timeout()
                             p.terminate()
