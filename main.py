@@ -185,7 +185,10 @@ def sha_run(sha):
     from mylib.androzoo import download
     sucess, desc, _ = download(sha, '/tmp', False)
     if sucess:
-        apk_run(desc, comprise=True)
+        try:
+            apk_run(desc, comprise=True)
+        except Exception as e:
+            print(sha, 'failed with error:', e, file=sys.stderr)
         try:
             os.remove(desc)
         except Exception as e:
