@@ -18,7 +18,8 @@ from jni_interfaces.utils import (record_static_jni_functions, clean_records,
 # the longest time in seconds to analyze 1 JNI function.
 WAIT_TIME = 180
 
-SO_DIRS = ['lib/armeabi-v7a/', 'lib/arm64-v8a/']
+# Directory for different ABIs, refer to: https://developer.android.com/ndk/guides/abis
+ABI_DIRS = ['lib/armeabi-v7a/', 'lib/armeabi/', 'lib/arm64-v8a/', 'lib/x86/', 'lib/x86_64/']
 FDROID_DIR = '../fdroid_crawler'
 NATIVE_FILE = os.path.join(FDROID_DIR, 'natives')
 # OUT_DIR = 'fdroid_result'
@@ -197,13 +198,18 @@ def sha_run(sha):
         print(f'download {sha} failed: {desc}', file=sys.stderr)
 
 
-def starts_with_so_dir(name):
-    itis = False
-    for so_dir in SO_DIRS:
-        if name.startswith(so_dir):
-            itis = True
+def select_abi_dir(dir_list):
+    selected = None
+    abis = set()
+    for n in dir_list:
+        if n.startswith('lib/'):
+            abis.add(n.split('/')[1])
+    for abi_dir in ABI_DIRS:
+        abi = abi_dir.split('/')[1]
+        if abi in abis:
+            selected = abi_dir
             break
-    return itis
+    return selected
 
 
 def apk_run(path, out=None, comprise=False):
@@ -216,9 +222,14 @@ def apk_run(path, out=None, comprise=False):
     perf.start()
     apk, _, dex = AnalyzeAPK(path)
     with apk.zip as zf:
+        chosen_abi_dir = select_abi_dir(zf.namelist())
+        if chosen_abi_dir is None:
+            logger.debug(f'No ABI directories were found for .so file in {path}')
+            return
+        logger.debug(f'Use shared library (i.e., .so) files from {chosen_abi_dir}')
         for n in zf.namelist():
-            if n.endswith('.so') and starts_with_so_dir(n):
-                # print('='*100, n)
+            if n.endswith('.so') and n.startswith(chosen_abi_dir):
+                logger.debug(f'Start to analyze {n}')
                 with zf.open(n) as so_file, mp.Manager() as mgr:
                     returns = mgr.dict()
                     proj, jvm, jenv = find_all_jni_functions(so_file, dex)
@@ -239,7 +250,7 @@ def apk_run(path, out=None, comprise=False):
                             perf.add_timeout()
                             p.terminate()
                             p.join()
-                            # print('timeout')
+                            logger.warning(f'Timeout when analyzing {n}')
                     for addr, invokees in returns.items():
                         record = Record.RECORDS.get(addr)
                         for invokee in invokees:
