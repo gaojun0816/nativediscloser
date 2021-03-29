@@ -25,7 +25,7 @@ This tool takes **APK** files as input. You can use `Python main.py --help` to c
 + this tool is developed based on [Angr](https://angr.io/) framework. To avoid the analysis to go too deep into the path of a state, the [`LengthLimiter`](https://docs.angr.io/core-concepts/pathgroups) is set to 500. This value can be adjusted by reset the `MAX_LENGTH` value in `jni_interfaces/utils.py`.
 
 # Output
-For app named *example-app.apk*, by default, a folder named *example-app_result* will be created. In this folder, for each *shared library* file in the APK, a counterpart result file will be generated with suffix *\*.result*. The result files are CSV files with following fields:
+For app named *example-app.apk*, by default, a folder named *example-app_result* will be created. In this folder, for each *shared library* file in the APK which contains JNI functions invoked by VM code, a counterpart result file will be generated with suffix *\*.result*. The result files are CSV files with following fields:
 + invoker_cls: class of **Entry** method
 + invoker_method: name of **Entry** method
 + invoker_signature: signature of **Entry** method
@@ -36,3 +36,9 @@ For app named *example-app.apk*, by default, a folder named *example-app_result*
 + invokee_signature: signature of **Exit** method
 + invokee_static: boolean value indicates whether the **Exit** method is a static method
 + invokee_desc: if there are failures in parsing certain parts of **Exit** method, there may be some reason given here
+
+There will be a *performance* file generated which states the performance of the tool when analyzing the APK. This file contains following fields:
++ elapsed: the time used to analyze the APK in seconds.
++ analyzed_so: number of analyzed *shared library* files. This number should equal to the number of *\*.so* files contained in the APK but more than the *\*.result* files in the result folder. Since there could be *\*.so* files contained in the APK but not really used.
++ analyzed_func: number of C JNI functions analyzed. This number should equal to the C JNI functions that have counterpart Java native methods.
++ timeout: number of C JNI functions that are timeout when analyzing. As there is a time limitation for analyzing each C JNI function.
