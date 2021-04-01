@@ -175,7 +175,9 @@ def parse_args():
     if args.out is None:
         # output locally with the same name of the apk.
         args.out = '.'
-    result_dir = args.apk.split('/')[-1].rstrip('.apk') + '_result'
+    basename = os.path.basename(args.apk)
+    without_extension = os.path.splitext(basename)[0]
+    result_dir = f"{without_extension}_result"
     out = os.path.join(args.out, result_dir)
     if not os.path.exists(out):
         os.makedirs(out)
