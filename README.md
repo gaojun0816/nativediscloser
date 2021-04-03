@@ -21,8 +21,8 @@ However, for most of Android app analysis tools, native part of Android apps is 
 This tool takes **APK** files as input. You can use `Python main.py --help` to check the usage of the tool.
 
 ## Limitation
-+ to analyze a certain JNI function (i.e., functions in native code which have counterpart methods in VM code), the time limit is set to 180 seconds. Thus, for large JNI functions, the result could be missing. To increase the analysis time limit, reset the `WAIT_TIME` value in `main.py`.
-+ this tool is developed based on [Angr](https://angr.io/) framework. To avoid the analysis to go too deep into the path of a state, the [`LengthLimiter`](https://docs.angr.io/core-concepts/pathgroups) is set to 500. This value can be adjusted by reset the `MAX_LENGTH` value in `jni_interfaces/utils.py`.
++ to analyze a certain JNI function (i.e., functions in native code which have counterpart methods in VM code) or *JNI_OnLoad* function for dynamic registration of JNI functions, the time limit is set to 180 600 seconds respectively. Thus, for large JNI functions, the result could be missing. To increase the analysis time limit, reset the `WAIT_TIME` and `DYNAMIC_ANALYSIS_TIME` value in `main.py`.
++ this tool is developed based on [Angr](https://angr.io/) framework. To avoid the analysis to go too deep into the path of a state, the [`LengthLimiter`](https://docs.angr.io/core-concepts/pathgroups) is set to 500 and 1000 repectively for analyzing JNI functions and *JNI_OnLoad*. This value can be adjusted by reset the `MAX_LENGTH` and `DYNAMIC_ANALYSIS_LENGTH` value in `jni_interfaces/utils.py`.
 
 # Output
 For app named *example-app.apk*, by default, a folder named *example-app_result* will be created. In this folder, for each *shared library* file in the APK which contains JNI functions invoked by VM code, a counterpart result file will be generated with suffix *\*.result*. The result files are CSV files with following fields:
@@ -42,3 +42,4 @@ There will be a *performance* file generated which states the performance of the
 + analyzed_so: number of analyzed *shared library* files. This number should equal to the number of *\*.so* files contained in the APK but more than the *\*.result* files in the result folder. Since there could be *\*.so* files contained in the APK but not really used.
 + analyzed_func: number of C JNI functions analyzed. This number should equal to the C JNI functions that have counterpart Java native methods.
 + timeout: number of C JNI functions that are timeout when analyzing. As there is a time limitation for analyzing each C JNI function.
++ dynamic_timeout: this is a boolean value indicates that whether the analysis of dynamic JNI functiong registration is timeout. If it is, then dynamically registered C JNI functions could be partially or not detected.

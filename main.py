@@ -17,6 +17,8 @@ from jni_interfaces.utils import (record_static_jni_functions, clean_records,
 
 # the longest time in seconds to analyze 1 JNI function.
 WAIT_TIME = 180
+# the longest time in seconds for dynamic registration analysis
+DYNAMIC_ANALYSIS_TIME = 600
 
 # Directory for different ABIs, refer to: https://developer.android.com/ndk/guides/abis
 ABI_DIRS = ['lib/armeabi-v7a/', 'lib/armeabi/', 'lib/arm64-v8a/', 'lib/x86/', 'lib/x86_64/']
@@ -39,6 +41,7 @@ class Performance:
         self._num_analyzed_func = 0
         self._num_analyzed_so = 0
         self._num_timeout = 0
+        self._dynamic_func_reg_analysis_failed = False
 
     def start(self):
         self._start_at = timeit.default_timer()
@@ -55,6 +58,9 @@ class Performance:
     def add_timeout(self):
         self._num_timeout += 1
 
+    def set_dynamic_reg_failed(self):
+        self._dynamic_func_reg_analysis_failed = True
+
     @property
     def elapsed(self):
         if self._start_at is None or self._end_at is None:
@@ -63,8 +69,8 @@ class Performance:
             return self._end_at - self._start_at
 
     def __str__(self):
-        s = 'elapsed,analyzed_so,analyzed_func,timeout\n'
-        s += f'{self.elapsed},{self._num_analyzed_so},{self._num_analyzed_func},{self._num_timeout}'
+        s = 'elapsed,analyzed_so,analyzed_func,timeout,dymamic_timeout\n'
+        s += f'{self.elapsed},{self._num_analyzed_so},{self._num_analyzed_func},{self._num_timeout},{self._dynamic_func_reg_analysis_failed}'
         return s
 
 
@@ -234,9 +240,12 @@ def apk_run(path, out=None, comprise=False):
                 logger.debug(f'Start to analyze {n}')
                 with zf.open(n) as so_file, mp.Manager() as mgr:
                     returns = mgr.dict()
-                    proj, jvm, jenv = find_all_jni_functions(so_file, dex)
+                    proj, jvm, jenv, dynamic_timeout = find_all_jni_functions(so_file, dex)
                     if proj is None:
+                        logger.warning(f'Project object generation failed for {n}')
                         continue
+                    if dynamic_timeout:
+                        perf.set_dynamic_reg_failed()
                     perf.add_analyzed_so()
                     for jni_func, record in Record.RECORDS.items():
                         # wrap the analysis with its own process to limit the
@@ -272,6 +281,8 @@ def refactor_cls_name(raw_name):
 
 def find_all_jni_functions(so_file, dex):
     proj, jvm_ptr, jenv_ptr = None, None, None
+    # Mark whether the analysis for dynamic registration is timeout.
+    dynamic_analysis_timeout = False
     try:
         cle_loader = cle.loader.Loader(so_file, auto_load_libs=False)
     except Exception as e:
@@ -282,9 +293,17 @@ def find_all_jni_functions(so_file, dex):
         clean_records()
         record_static_jni_functions(proj, dex)
         if proj.loader.find_symbol(JNI_LOADER):
-            # print('record dynamic', '-'*50)
-            record_dynamic_jni_functions(proj, jvm_ptr, jenv_ptr, dex)
-    return proj, jvm_ptr, jenv_ptr
+            # wrap the analysis with its own process to limit the analysis time.
+            p = mp.Process(target=record_dynamic_jni_functions,
+                    args=(*(proj, jvm_ptr, jenv_ptr, dex),))
+            p.start()
+            p.join(DYNAMIC_ANALYSIS_TIME)
+            if p.is_alive():
+                dynamic_analysis_timeout = True
+                p.terminate()
+                p.join()
+                logger.warning('Timeout when analyzing dynamic registration')
+    return proj, jvm_ptr, jenv_ptr, dynamic_analysis_timeout
 
 
 if __name__ == '__main__':
