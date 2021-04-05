@@ -39,7 +39,8 @@ For app named *example-app.apk*, by default, a folder named *example-app_result*
 
 There will be a *performance* file generated which states the performance of the tool when analyzing the APK. This file contains following fields:
 + elapsed: the time used to analyze the APK in seconds.
++ num_so: number of *shared library* files found in current app. For different architectures, they are *NOT* counted duplicated. 
 + analyzed_so: number of analyzed *shared library* files. This number should equal to the number of *\*.so* files contained in the APK but more than the *\*.result* files in the result folder. Since there could be *\*.so* files contained in the APK but not really used.
 + analyzed_func: number of C JNI functions analyzed. This number should equal to the C JNI functions that have counterpart Java native methods.
-+ timeout: number of C JNI functions that are timeout when analyzing. As there is a time limitation for analyzing each C JNI function.
-+ dynamic_timeout: this is a boolean value indicates that whether the analysis of dynamic JNI functiong registration is timeout. If it is, then dynamically registered C JNI functions could be partially or not detected.
++ func_timeout: number of C JNI functions that are timeout when analyzing. As there is a time limitation for analyzing each C JNI function.
++ dynamic_timeout: this is a count indicates how many analyses of dynamic JNI function registration is timeout. Since when such an analysis timeout, the dynamically registered C JNI functions could only partially or even not be detected.
