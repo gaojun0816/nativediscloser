@@ -39,7 +39,6 @@ class Performance:
         self._start_at = None
         self._end_at = None
         self._num_analyzed_func = 0
-        self._num_so = 0
         self._num_analyzed_so = 0
         self._num_timeout = 0
         self._dynamic_func_reg_analysis_timeout = 0
@@ -52,9 +51,6 @@ class Performance:
 
     def add_analyzed_func(self):
         self._num_analyzed_func += 1
-
-    def add_so(self):
-        self._num_so += 1
 
     def add_analyzed_so(self):
         self._num_analyzed_so += 1
@@ -73,8 +69,8 @@ class Performance:
             return self._end_at - self._start_at
 
     def __str__(self):
-        s = 'elapsed,num_so,analyzed_so,analyzed_func,func_timeout,dymamic_timeout\n'
-        s += f'{self.elapsed},{self._num_so},{self._num_analyzed_so},{self._num_analyzed_func},{self._num_timeout},{self._dynamic_func_reg_analysis_timeout}'
+        s = 'elapsed,analyzed_so,analyzed_func,func_timeout,dymamic_timeout\n'
+        s += f'{self.elapsed},{self._num_analyzed_so},{self._num_analyzed_func},{self._num_timeout},{self._dynamic_func_reg_analysis_timeout}'
         return s
 
 
@@ -241,7 +237,6 @@ def apk_run(path, out=None, comprise=False):
         logger.debug(f'Use shared library (i.e., .so) files from {chosen_abi_dir}')
         for n in zf.namelist():
             if n.endswith('.so') and n.startswith(chosen_abi_dir):
-                perf.add_so()
                 logger.debug(f'Start to analyze {n}')
                 with zf.open(n) as so_file, mp.Manager() as mgr:
                     returns = mgr.dict()
@@ -255,7 +250,6 @@ def apk_run(path, out=None, comprise=False):
                     for jni_func, record in Record.RECORDS.items():
                         # wrap the analysis with its own process to limit the
                         # analysis time.
-                        # print(record.symbol_name)
                         p = mp.Process(target=analyze_jni_function,
                                 args=(*(jni_func, proj, jvm, jenv, dex, returns),))
                         p.start()
@@ -299,15 +293,18 @@ def find_all_jni_functions(so_file, dex):
         record_static_jni_functions(proj, dex)
         if proj.loader.find_symbol(JNI_LOADER):
             # wrap the analysis with its own process to limit the analysis time.
-            p = mp.Process(target=record_dynamic_jni_functions,
-                    args=(*(proj, jvm_ptr, jenv_ptr, dex),))
-            p.start()
-            p.join(DYNAMIC_ANALYSIS_TIME)
-            if p.is_alive():
-                dynamic_analysis_timeout = True
-                p.terminate()
-                p.join()
-                logger.warning('Timeout when analyzing dynamic registration')
+            with mp.Manager() as mgr:
+                records = mgr.dict()
+                p = mp.Process(target=record_dynamic_jni_functions,
+                        args=(*(proj, jvm_ptr, jenv_ptr, dex, records),))
+                p.start()
+                p.join(DYNAMIC_ANALYSIS_TIME)
+                if p.is_alive():
+                    dynamic_analysis_timeout = True
+                    p.terminate()
+                    p.join()
+                    logger.warning('Timeout when analyzing dynamic registration')
+                Record.RECORDS.update(records)
     return proj, jvm_ptr, jenv_ptr, dynamic_analysis_timeout
 
 
