@@ -42,4 +42,4 @@ There will be a *performance* file generated which states the performance of the
 + analyzed_so: number of analyzed *shared library* files. This number should equal to the number of *\*.so* files contained in the APK but more than the *\*.result* files in the result folder. Since there could be *\*.so* files contained in the APK but not really used.
 + analyzed_func: number of C JNI functions analyzed. This number should equal to the C JNI functions that have counterpart Java native methods.
 + func_timeout: number of C JNI functions that are timeout when analyzing. As there is a time limitation for analyzing each C JNI function.
-+ dynamic_timeout: this is a count indicates how many analyses of dynamic JNI function registration is timeout. Since when such an analysis timeout, the dynamically registered C JNI functions could only partially or even not be detected.
++ dynamic_timeout: this is a count indicates how many analyses of dynamic JNI function registration is timeout. Since when such an analysis timeout, the dynamically registered C JNI functions will highly possibly not be detected.
