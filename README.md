@@ -22,7 +22,7 @@ This tool takes **APK** files as input. You can use `Python main.py --help` to c
 
 ## Limitation
 + to analyze a certain JNI function (i.e., functions in native code which have counterpart methods in VM code) or *JNI_OnLoad* function for dynamic registration of JNI functions, the time limit is set to 180 600 seconds respectively. Thus, for large JNI functions, the result could be missing. To increase the analysis time limit, reset the `WAIT_TIME` and `DYNAMIC_ANALYSIS_TIME` value in `main.py`.
-+ this tool is developed based on [Angr](https://angr.io/) framework. To avoid the analysis to go too deep into the path of a state, the [`LengthLimiter`](https://docs.angr.io/core-concepts/pathgroups) is set to 500 and 1000 repectively for analyzing JNI functions and *JNI_OnLoad*. This value can be adjusted by reset the `MAX_LENGTH` and `DYNAMIC_ANALYSIS_LENGTH` value in `jni_interfaces/utils.py`.
++ this tool is developed based on [Angr](https://angr.io/) framework. To avoid the analysis to go too deep into the path of a state, the [`LengthLimiter`](https://docs.angr.io/core-concepts/pathgroups) is set to 500000 and 100000 repectively for analyzing JNI functions and *JNI_OnLoad*. This value can be adjusted by reset the `MAX_LENGTH` and `DYNAMIC_ANALYSIS_LENGTH` value in `jni_interfaces/utils.py`.
 
 # Output
 For app named *example-app.apk*, by default, a folder named *example-app_result* will be created. In this folder, for each *shared library* file in the APK which contains JNI functions invoked by VM code, a counterpart result file will be generated with suffix *\*.result*. The result files are CSV files with following fields:

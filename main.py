@@ -10,6 +10,7 @@ import cle
 import logging
 from androguard.misc import AnalyzeAPK
 
+from import_implementations import hookAllImportSymbols
 from jni_interfaces.record import Record
 from jni_interfaces.utils import (record_static_jni_functions, clean_records,
         record_dynamic_jni_functions, print_records, analyze_jni_function,
@@ -288,6 +289,7 @@ def find_all_jni_functions(so_file, dex):
         logger.warning(f'{so_file} cause CLE loader error: {e}')
     else:
         proj = angr.Project(cle_loader)
+        hookAllImportSymbols(proj)
         jvm_ptr, jenv_ptr = jni_env_prepare_in_object(proj)
         clean_records()
         record_static_jni_functions(proj, dex)
