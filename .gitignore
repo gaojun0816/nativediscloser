@@ -3,5 +3,5 @@
 __pycache__/
 *.py[cod]
 
-so4test/
-apps4test/
+*test*
+*result
