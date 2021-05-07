@@ -14,8 +14,8 @@ from .record import Record, RecordNotFoundError
 JNI_LOADER = 'JNI_OnLoad'
 # value for "LengthLimiter" to limit the length of path a state goes through.
 # refer to: https://docs.angr.io/core-concepts/pathgroups
-MAX_LENGTH = 500
-DYNAMIC_ANALYSIS_LENGTH = 1000
+MAX_LENGTH = 500000
+DYNAMIC_ANALYSIS_LENGTH = 100000
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
