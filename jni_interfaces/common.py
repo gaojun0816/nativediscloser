@@ -40,19 +40,29 @@ class JNIProcedureBase(SimProcedure):
         ref = self.state.project.loader.extern_object.allocate()
         jcls = JavaClass(cls_name, init, desc)
         self.state.globals[ref] = jcls
-        return ref
+
+        symb_name = desc if desc else 'jobject_value'
+        obj_symbol = self.state.solver.BVS(symb_name, self.arch.bits)
+        self.state.add_constraints(obj_symbol == ref)
+        return obj_symbol
 
     def create_java_method_ID(self, cls, name, signature, static=False):
         ref = self.state.project.loader.extern_object.allocate()
         jmethod = JavaMethod(cls, name, signature, static)
         self.state.globals[ref] = jmethod
-        return ref
+
+        method_symbol = self.state.solver.BVS('jmethod_value', self.arch.bits)
+        self.state.add_constraints(method_symbol == ref)
+        return method_symbol
 
     def create_java_field_ID(self, cls, name, ftype, static=False):
         ref = self.state.project.loader.extern_object.allocate()
         jfield = JavaField(cls, name, ftype)
         self.state.globals[ref] = jfield
-        return ref
+
+        field_symbol = self.state.solver.BVS('jfield_value', self.arch.bits)
+        self.state.add_constraints(jfield_symbol == ref)
+        return jfield_symbol
 
     def get_ref(self, raw_ref):
         ref = self.state.solver.eval(raw_ref)

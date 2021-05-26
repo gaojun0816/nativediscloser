@@ -14,15 +14,16 @@ def sig_refine(sig):
     return sig
 
 class Invokee:
-    def __init__(self, method):
+    def __init__(self, method, argument_expressions):
         self.cls_name = cls_2_dot_pattern(method.cls.name) if method.cls is not None else None
         self.desc = method.cls.desc if method.cls is not None else None
         self.method_name = method.name
         self.signature = sig_refine(method.signature)
+        self.argument_expressions = argument_expressions
         self._static = method.static
 
     def __str__(self):
-        s = f'{self.cls_name}, {self.method_name}, {self.signature}, {self._static}'
+        s = f'{self.cls_name}, {self.method_name}, {self.signature}, {self._static}, {self.argument_expressions}'
         if self.desc:
             s += f', {self.desc}'
         return s
@@ -45,7 +46,7 @@ class Record:
         self._invokees = None # list of method invoked by current native method
         Record.RECORDS.update({func_ptr: self}) # add itself to global record
 
-    def add_invokee(self, param):
+    def add_invokee(self, param, arguments=[]):
         """Add the Java invokee method information
         The invokee is a Java method invoked by current native function.
 
@@ -58,7 +59,7 @@ class Record:
         if isinstance(param, Invokee):
             invokee = param
         else:
-            invokee = Invokee(param)
+            invokee = Invokee(param, arguments)
         if self._invokees is None:
             self._invokees = list()
         self._invokees.append(invokee)

@@ -121,266 +121,332 @@ class CallMethodBase(JPB):
                 logger.warning(f'{self.__class__} received method pointer:' +\
                         f'{method_ptr} without corresponding method instance')
             else:
-                record.add_invokee(method)
+                record.add_invokee(method, self.get_arguments_symbols(method.signature))
         return_value = self.get_return_value(method)
-        if return_value:
+        if return_value != None:
             return return_value
 
     def get_current_record(self):
         func_ptr = self.state.globals.get('func_ptr')
         return Record.RECORDS.get(func_ptr)
 
+    def get_arguments_symbols(self, signature):
+        if not signature.startswith('('):
+            return
+        if ')' not in signature:
+            return
+        args_signature = signature[1:].split(')')[0]
+        sig_idx = 0
+        i = 0
+        args_symbs = []
+        while sig_idx < len(args_signature):
+            if args_signature[sig_idx] in ['Z','B','C','S','I','J','F','D']:
+                args_symbs.append(self.get_argument_value(i))
+                i += 1
+                sig_idx += 1
+            elif args_signature[sig_idx] == '[':
+                sig_idx += 1
+                if args_signature[sig_idx] in ['Z','B','C','S','I','J','F','D']:
+                    args_symbs.append(self.get_argument_value(i))
+                    i += 1
+                    sig_idx += 1
+                else:
+                    raise ValueError('Wrong method signature format: "%s"' % args_signature)
+            elif args_signature[sig_idx] == 'L':
+                sig_idx += 1
+                while args_signature[sig_idx] != ';':
+                    if sig_idx == len(args_signature):
+                        raise ValueError('Wrong method signature format: "%s"' % args_signature)
+                    sig_idx += 1
+                sig_idx += 1
+                args_symbs.append(self.get_argument_value(i))
+                i += 1
+            else:
+                raise ValueError('Wrong method signature format: "%s"' % args_signature)
+        return args_symbs
+
+    def get_argument_value(self, arg_index):
+        raise NotImplementedError('Extending CallMethodBase without implement get_argument_value!')
+
     def get_return_value(self, method):
         raise NotImplementedError('Extending CallMethodBase without implement get_return_value!')
 
+# getArgumentsSymbols implementation:
+# - CallMethodParamArg: parameters are passed using the Call*Method parameters
+# - CallMethodArrayArg: parameters are passed using an array
+# - CallMethodVaArg: parameters are passed through a va_list
 
-class CallPrimaryMethod(CallMethodBase):
+class CallMethodParamArg(CallMethodBase):
+    def get_argument_value(self, arg_index):
+        return self.arg(3+arg_index)
+
+class CallMethodArrayArg(CallMethodBase):
+    def get_argument_value(self, arg_index):
+        raise NotImplementedError('TODO: implement get_argument_value for CallMethodArrayArg!')
+
+class CallMethodVaArg(CallMethodBase):
+    def get_argument_value(self, arg_index):
+        return self.state.memory.load(self.arg(3)+4*arg_index, 4, endness=self.arch.memory_endness)
+
+# getArgumentsSymbols implementation:
+# - CallReturnPrimaryMethod: returns a primary value
+# - CallReturnVoidMethod: doesn't not return a value
+# - CallReturnObjectMethod: returns an object
+
+
+class CallReturnPrimaryMethod(CallMethodBase):
     def get_return_value(self, method):
         return self.state.solver.BVS('primary_value', self.arch.bits)
 
-class CallBooleanMethod(CallPrimaryMethod):
-    pass
-
-
-class CallBooleanMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallBooleanMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallByteMethod(CallPrimaryMethod):
-    pass
-
-
-class CallByteMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallByteMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallCharMethod(CallPrimaryMethod):
-    pass
-
-
-class CallCharMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallCharMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallShortMethod(CallPrimaryMethod):
-    pass
-
-
-class CallShortMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallShortMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallIntMethod(CallPrimaryMethod):
-    pass
-
-
-class CallIntMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallIntMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallLongMethod(CallPrimaryMethod):
-    pass
-
-
-class CallLongMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallLongMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallFloatMethod(CallPrimaryMethod):
-    pass
-
-
-class CallFloatMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallFloatMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallDoubleMethod(CallPrimaryMethod):
-    pass
-
-
-class CallDoubleMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallDoubleMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallStaticBooleanMethod(CallPrimaryMethod):
-    pass
-
-
-class CallStaticBooleanMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallStaticBooleanMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallStaticByteMethod(CallPrimaryMethod):
-    pass
-
-
-class CallStaticByteMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallStaticByteMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallStaticCharMethod(CallPrimaryMethod):
-    pass
-
-
-class CallStaticCharMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallStaticCharMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallStaticShortMethod(CallPrimaryMethod):
-    pass
-
-
-class CallStaticShortMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallStaticShortMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallStaticIntMethod(CallPrimaryMethod):
-    pass
-
-
-class CallStaticIntMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallStaticIntMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallStaticLongMethod(CallPrimaryMethod):
-    pass
-
-
-class CallStaticLongMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallStaticLongMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallStaticFloatMethod(CallPrimaryMethod):
-    pass
-
-
-class CallStaticFloatMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallStaticFloatMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallStaticDoubleMethod(CallPrimaryMethod):
-    pass
-
-
-class CallStaticDoubleMethodV(CallPrimaryMethod):
-    pass
-
-
-class CallStaticDoubleMethodA(CallPrimaryMethod):
-    pass
-
-
-class CallVoidMethod(CallMethodBase):
+class CallReturnVoidMethod(CallMethodBase):
     def get_return_value(self, method):
         return None
 
-
-class CallVoidMethodV(CallVoidMethod):
-    pass
-
-
-class CallVoidMethodA(CallVoidMethod):
-    pass
-
-
-class CallStaticVoidMethod(CallMethodBase):
-    pass
-
-
-class CallStaticVoidMethodV(CallVoidMethod):
-    pass
-
-
-class CallStaticVoidMethodA(CallVoidMethod):
-    pass
-
-
-class CallObjectMethod(CallMethodBase):
+class CallReturnObjectMethod(CallMethodBase):
     def get_return_value(self, method):
         # for complex code structure, method may not be able to parse.
         if method is None:
             return None
         rtype = method.get_return_type().strip('L;').replace('/', '.')
-        return self.create_java_class(rtype, init=True)
+        return self.create_java_class(rtype, init=True, desc="return_#1")
 
+# Actual Call*Method* SimProcedure
 
-class CallObjectMethodV(CallObjectMethod):
+class CallBooleanMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+class CallBooleanMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
     pass
 
 
-class CallObjectMethodA(CallObjectMethod):
+class CallBooleanMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
     pass
 
 
-class CallStaticObjectMethod(CallObjectMethod):
+class CallByteMethod(CallReturnPrimaryMethod, CallMethodParamArg):
     pass
 
 
-class CallStaticObjectMethodV(CallObjectMethod):
+class CallByteMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
     pass
 
 
-class CallStaticObjectMethodA(CallObjectMethod):
+class CallByteMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
+    pass
+
+
+class CallCharMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallCharMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
+    pass
+
+
+class CallCharMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
+    pass
+
+
+class CallShortMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallShortMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
+    pass
+
+
+class CallShortMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
+    pass
+
+
+class CallIntMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallIntMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
+    pass
+
+
+class CallIntMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
+    pass
+
+
+class CallLongMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallLongMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
+    pass
+
+
+class CallLongMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
+    pass
+
+
+class CallFloatMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallFloatMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
+    pass
+
+
+class CallFloatMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
+    pass
+
+
+class CallDoubleMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallDoubleMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
+    pass
+
+
+class CallDoubleMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
+    pass
+
+
+class CallStaticBooleanMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallStaticBooleanMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
+    pass
+
+
+class CallStaticBooleanMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
+    pass
+
+
+class CallStaticByteMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallStaticByteMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
+    pass
+
+
+class CallStaticByteMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
+    pass
+
+
+class CallStaticCharMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallStaticCharMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
+    pass
+
+
+class CallStaticCharMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
+    pass
+
+
+class CallStaticShortMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallStaticShortMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
+    pass
+
+
+class CallStaticShortMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
+    pass
+
+
+class CallStaticIntMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallStaticIntMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
+    pass
+
+
+class CallStaticIntMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
+    pass
+
+
+class CallStaticLongMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallStaticLongMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
+    pass
+
+
+class CallStaticLongMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
+    pass
+
+
+class CallStaticFloatMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallStaticFloatMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
+    pass
+
+
+class CallStaticFloatMethodA(CallReturnPrimaryMethod, CallMethodArrayArg):
+    pass
+
+
+class CallStaticDoubleMethod(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallStaticDoubleMethodV(CallReturnPrimaryMethod, CallMethodVaArg):
+    pass
+
+
+class CallStaticDoubleMethodA(CallReturnPrimaryMethod, CallMethodParamArg):
+    pass
+
+
+class CallVoidMethod(CallReturnVoidMethod, CallMethodParamArg):
+    pass
+
+class CallVoidMethodV(CallReturnVoidMethod, CallMethodVaArg):
+    pass
+
+
+class CallVoidMethodA(CallReturnVoidMethod, CallMethodArrayArg):
+    pass
+
+
+class CallStaticVoidMethod(CallReturnVoidMethod, CallMethodParamArg):
+    pass
+
+
+class CallStaticVoidMethodV(CallReturnVoidMethod, CallMethodVaArg):
+    pass
+
+
+class CallStaticVoidMethodA(CallReturnVoidMethod, CallMethodArrayArg):
+    pass
+
+
+
+class CallObjectMethod(CallReturnObjectMethod, CallMethodParamArg):
+    pass
+
+class CallObjectMethodV(CallReturnObjectMethod, CallMethodVaArg):
+    pass
+
+
+class CallObjectMethodA(CallReturnObjectMethod, CallMethodArrayArg):
+    pass
+
+
+class CallStaticObjectMethod(CallReturnObjectMethod, CallMethodParamArg):
+    pass
+
+
+class CallStaticObjectMethodV(CallReturnObjectMethod, CallMethodVaArg):
+    pass
+
+
+class CallStaticObjectMethodA(CallReturnObjectMethod, CallMethodArrayArg):
     pass
 
 

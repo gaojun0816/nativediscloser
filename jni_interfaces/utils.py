@@ -144,11 +144,13 @@ def get_prepared_jni_onload_state(proj, jvm_ptr, jenv_ptr, dex=None):
 
 
 def analyze_jni_function(func_addr, proj, jvm_ptr, jenv_ptr, dex=None, returns=None):
-    func_params, updates = get_jni_function_params(proj, func_addr, jenv_ptr)
+    func_params, updates, constraints = get_jni_function_params(proj, func_addr, jenv_ptr)
     state = proj.factory.call_state(func_addr, *func_params)
     state.globals['func_ptr'] = func_addr
     for k, v in updates.items():
         state.globals[k] = v
+    for c in constraints:
+        state.add_constraints(c)
     jni_env_prepare_in_state(state, jvm_ptr, jenv_ptr, dex)
     tech = LengthLimiter(MAX_LENGTH)
     simgr = proj.factory.simgr(state)
@@ -157,6 +159,8 @@ def analyze_jni_function(func_addr, proj, jvm_ptr, jenv_ptr, dex=None, returns=N
         simgr.run()
     except Exception as e:
         logger.warning(f'Analysis JNI function failed: {e}')
+    if(len(simgr.stashes['cut'])>0):
+        logger.warning(f'LengthLimiter has triggered during the execution of function @0x%x' % func_addr)
     # for multiprocess running. param "returns" should be a
     # multiprocessing.Manager().dict()
     if returns is not None:
@@ -166,6 +170,7 @@ def analyze_jni_function(func_addr, proj, jvm_ptr, jenv_ptr, dex=None, returns=N
 
 
 def get_jni_function_params(proj, func_addr, jenv_ptr):
+    constraints = []
     record = Record.RECORDS.get(func_addr)
     if record is None:
         raise RecordNotFoundError('Relevant JNI function record not found!')
@@ -209,6 +214,7 @@ def get_jni_function_params(proj, func_addr, jenv_ptr):
                 'D': BVS('double_value', proj.arch.bits),
                 '[D': BVS('double_array', proj.arch.bits),
         }
+        param_nb = 0
         for p in plist:
             param = symbol_values.get(p)
             if param is None:
@@ -223,10 +229,14 @@ def get_jni_function_params(proj, func_addr, jenv_ptr):
                     jclass = JavaClass(cls_name, init=True)
                 if p.startswith('['):
                     jclass.is_array = True
-                param = proj.loader.extern_object.allocate()
-                state_updates.update({param: jclass})
+                ref = proj.loader.extern_object.allocate()
+                obj_symbol = BVS("param_#%i" % (param_nb+1), proj.arch.bits)
+                constraints.append(obj_symbol == ref)
+                state_updates.update({ref: jclass})
+                param = obj_symbol
             params.append(param)
-    return params, state_updates
+            param_nb += 1
+    return params, state_updates, constraints
 
 
 def parse_params_from_sig(signature):
@@ -283,7 +293,8 @@ def print_records(fname=None):
     header = 'invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
              'invoker_static_export, ' +\
              'invokee_cls, invokee_method, invokee_signature, invokee_static, ' +\
-             'invokee_desc'
+             'argument_expression_list' +\
+             'invokee_desc, '
     if len(Record.RECORDS) > 0:
         f = None
         if fname is None:
