@@ -16,6 +16,8 @@ from jni_interfaces.utils import (record_static_jni_functions, clean_records,
         record_dynamic_jni_functions, print_records, analyze_jni_function,
         jni_env_prepare_in_object, JNI_LOADER)
 
+ANGR_RETDEC_OFFSET = 4194305
+
 # the longest time in seconds to analyze 1 JNI function.
 WAIT_TIME = 180
 # the longest time in seconds for dynamic registration analysis
@@ -160,8 +162,8 @@ def get_native_apks():
 
 
 def cmd():
-    path_2_apk, out = parse_args()
-    apk_run(path_2_apk, out)
+    path_2_apk, out, func_info = parse_args()
+    apk_run(path_2_apk, out, func_info)
 
 
 def print_performance(perf, out):
@@ -175,6 +177,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('apk', type=str, help='directory to the APK file')
     parser.add_argument('--out', type=str, default=None, help='the output directory')
+    parser.add_argument('--funcs', type=str, default=None, help='Info of binary functions for exit invocation detection. For each line, it should be method name, start address and end address with ":" seperated.')
     args = parser.parse_args()
     if not os.path.exists(args.apk):
         print('APK file does not exist!', file=sys.stderr)
@@ -182,13 +185,34 @@ def parse_args():
     if args.out is None:
         # output locally with the same name of the apk.
         args.out = '.'
+    func_info = None
+    if args.funcs is not None:
+        if os.path.isfile(args.funcs):
+            f_info = dict()
+            with open(args.funcs) as f:
+                for l in f:
+                    method, start, end = l.strip().split(':')
+                    try:
+                        start = int(start, 0) + ANGR_RETDEC_OFFSET
+                        end = int(end, 0) + ANGR_RETDEC_OFFSET
+                        f_info.update({method : (start, end)})
+                    except ValueError:
+                        print(f'"{l}" from the binary function file "{args.funcs}" is not an address. Note: addresses should be decimal or hexdecimal numbers. For hexdecimal numbers, they need to be started with "0x" prefix', file=sys.stderr)
+                        sys.exit(-1)
+            if len(f_info) > 0:
+                func_info = f_info
+            else:
+                logger.warning('Binary functions provided via arguments "--funcs" empty!')
+        else:
+            print('For argument "--funcs", a path to a file should be provided', file=sys.stderr)
+            sys.exit(-1)
     basename = os.path.basename(args.apk)
     without_extension = os.path.splitext(basename)[0]
     result_dir = f"{without_extension}_result"
     out = os.path.join(args.out, result_dir)
     if not os.path.exists(out):
         os.makedirs(out)
-    return args.apk, out
+    return args.apk, out, func_info
 
 
 def sha_run(sha):
@@ -221,7 +245,56 @@ def select_abi_dir(dir_list):
     return selected
 
 
-def apk_run(path, out=None, comprise=False):
+def cg_addr_hook(state):
+    addr = state.addr
+    func_info = state.globals.get('func_info')
+    func_stack = state.globals.get('func_stack')
+    if len(func_stack) == 0:
+        # entering a tracking function
+        func = find_func(addr, func_info, 'enter')
+        if func is not None:
+            logger.debug(f'enter func: {func}')
+            func_stack.append(func)
+    else:
+        # check if exiting current function
+        _, end = func_info.get(func_stack[-1])
+        if end == addr:
+            exit_func = func_stack.pop()
+            logger.debug(f'exit func: {exit_func}')
+        # check if enterring a new function
+        func = find_func(addr, func_info, 'enter')
+        if func is not None:
+            logger.debug(f'enter func: {func}')
+            func_stack.append(func)
+
+
+def find_func(addr, f_info, addr_type):
+    types = ('enter', 'exit')
+    the_func = None
+    if not addr_type in types:
+        logger.warning(f'"find_func" does not support the "addr_type": {addr_type}!')
+        return the_func
+    for func, addrs in f_info.items():
+        start, end = addrs
+        if addr_type == types[0]:
+            func_addr = start
+        else:
+            func_addr = end
+        if addr == func_addr:
+            the_func = func
+            break
+    return the_func
+
+
+def extract_addrs(func_info):
+    addrs = set()
+    for start, end in func_info.values():
+        addrs.add(start)
+        addrs.add(end)
+    return addrs
+
+
+def apk_run(path, out=None, func_info=None, comprise=False):
     perf = Performance()
     if out is None:
         result_dir = path.split('/')[-1].rstrip('.apk') + '_result'
@@ -247,12 +320,23 @@ def apk_run(path, out=None, comprise=False):
                         continue
                     if dynamic_timeout:
                         perf.add_dynamic_reg_timeout()
+                    global_refs = None
+                    if func_info is not None:
+                        global_refs = {
+                            'func_info': mgr.dict(func_info),
+                            'func_stack': mgr.list()
+                        }
+                        for addr in extract_addrs(func_info):
+                            proj.hook(addr, hook=cg_addr_hook)
                     perf.add_analyzed_so()
                     for jni_func, record in Record.RECORDS.items():
+                        # clear func stack before each analysis
+                        if global_refs is not None:
+                            global_refs.get('func_stack')[:] = list()
                         # wrap the analysis with its own process to limit the
                         # analysis time.
                         p = mp.Process(target=analyze_jni_function,
-                                args=(*(jni_func, proj, jvm, jenv, dex, returns),))
+                                args=(*(jni_func, proj, jvm, jenv, dex, returns, global_refs),))
                         p.start()
                         perf.add_analyzed_func()
                         # For analysis of each .so file, we wait for 3mins at most.

@@ -121,7 +121,8 @@ class CallMethodBase(JPB):
                 logger.warning(f'{self.__class__} received method pointer:' +\
                         f'{method_ptr} without corresponding method instance')
             else:
-                record.add_invokee(method)
+                cur_func = self.get_cur_func()
+                record.add_invokee(method, cur_func)
         return_value = self.get_return_value(method)
         if return_value:
             return return_value
@@ -129,6 +130,13 @@ class CallMethodBase(JPB):
     def get_current_record(self):
         func_ptr = self.state.globals.get('func_ptr')
         return Record.RECORDS.get(func_ptr)
+
+    def get_cur_func(self):
+        cur_func = None
+        func_stack = self.state.globals.get('func_stack')
+        if len(func_stack) > 0:
+            cur_func = func_stack[-1]
+        return cur_func
 
     def get_return_value(self, method):
         raise NotImplementedError('Extending CallMethodBase without implement get_return_value!')
