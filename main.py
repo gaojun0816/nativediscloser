@@ -2,11 +2,14 @@ import os
 import sys
 import argparse
 import timeit
+import tempfile
 import multiprocessing as mp
 import multiprocessing.pool
 import threading
 import angr
 import cle
+import pydot
+import networkx as nx
 import logging
 from androguard.misc import AnalyzeAPK
 
@@ -162,8 +165,8 @@ def get_native_apks():
 
 
 def cmd():
-    path_2_apk, out, func_info = parse_args()
-    apk_run(path_2_apk, out, func_info)
+    path_2_apk, out, output_cg = parse_args()
+    apk_run(path_2_apk, out, output_cg)
 
 
 def print_performance(perf, out):
@@ -177,7 +180,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('apk', type=str, help='directory to the APK file')
     parser.add_argument('--out', type=str, default=None, help='the output directory')
-    parser.add_argument('--funcs', type=str, default=None, help='Info of binary functions for exit invocation detection. For each line, it should be method name, start address and end address with ":" seperated.')
+    parser.add_argument('--cg', help='Enable the output of binary callgraph as a dot file', action='store_true')
     args = parser.parse_args()
     if not os.path.exists(args.apk):
         print('APK file does not exist!', file=sys.stderr)
@@ -185,34 +188,13 @@ def parse_args():
     if args.out is None:
         # output locally with the same name of the apk.
         args.out = '.'
-    func_info = None
-    if args.funcs is not None:
-        if os.path.isfile(args.funcs):
-            f_info = dict()
-            with open(args.funcs) as f:
-                for l in f:
-                    method, start, end = l.strip().split(':')
-                    try:
-                        start = int(start, 0) + ANGR_RETDEC_OFFSET
-                        end = int(end, 0) + ANGR_RETDEC_OFFSET
-                        f_info.update({method : (start, end)})
-                    except ValueError:
-                        print(f'"{l}" from the binary function file "{args.funcs}" is not an address. Note: addresses should be decimal or hexdecimal numbers. For hexdecimal numbers, they need to be started with "0x" prefix', file=sys.stderr)
-                        sys.exit(-1)
-            if len(f_info) > 0:
-                func_info = f_info
-            else:
-                logger.warning('Binary functions provided via arguments "--funcs" empty!')
-        else:
-            print('For argument "--funcs", a path to a file should be provided', file=sys.stderr)
-            sys.exit(-1)
     basename = os.path.basename(args.apk)
     without_extension = os.path.splitext(basename)[0]
     result_dir = f"{without_extension}_result"
     out = os.path.join(args.out, result_dir)
     if not os.path.exists(out):
         os.makedirs(out)
-    return args.apk, out, func_info
+    return args.apk, out, args.cg
 
 
 def sha_run(sha):
@@ -245,6 +227,17 @@ def select_abi_dir(dir_list):
     return selected
 
 
+def get_return_address(state):
+    # TODO: check architecture to decide from where to retrieve return address.
+    return_addr = None
+    # for ARM, get it from register, lr
+    if 'ARM' in state.arch.name:
+        return_addr = state.solver.eval(state.regs.lr)
+    else:
+        logger.warning(f'Retrieve return address of architecture {state.arch.name} has not been implemented!')
+    return return_addr
+
+
 def cg_addr_hook(state):
     addr = state.addr
     func_info = state.globals.get('func_info')
@@ -255,10 +248,17 @@ def cg_addr_hook(state):
         if func is not None:
             logger.debug(f'enter func: {func}')
             func_stack.append(func)
+            info = func_info.get(func)
+            # appending and hooking func ending address for judging exiting of the func.
+            return_addr = get_return_address(state)
+            info.append(return_addr)
+            # as func_info is a dict proxy, the list object have always to be updated.
+            func_info.update({func: info})
+            state.project.hook(return_addr, hook=cg_addr_hook)
     else:
         # check if exiting current function
-        _, end = func_info.get(func_stack[-1])
-        if end == addr:
+        addrs = func_info.get(func_stack[-1])
+        if len(addrs) == 2 and addrs[1] == addr:
             exit_func = func_stack.pop()
             logger.debug(f'exit func: {exit_func}')
         # check if enterring a new function
@@ -266,6 +266,13 @@ def cg_addr_hook(state):
         if func is not None:
             logger.debug(f'enter func: {func}')
             func_stack.append(func)
+            info = func_info.get(func)
+            # appending and hooking func ending address for judging exiting of the func.
+            return_addr = get_return_address(state)
+            info.append(return_addr)
+            # as func_info is a dict proxy, the list object have always to be updated.
+            func_info.update({func: info})
+            state.project.hook(return_addr, hook=cg_addr_hook)
 
 
 def find_func(addr, f_info, addr_type):
@@ -275,26 +282,43 @@ def find_func(addr, f_info, addr_type):
         logger.warning(f'"find_func" does not support the "addr_type": {addr_type}!')
         return the_func
     for func, addrs in f_info.items():
-        start, end = addrs
         if addr_type == types[0]:
-            func_addr = start
+            func_addr = addrs[0]
         else:
-            func_addr = end
+            func_addr = addrs[1] if len(addrs) == 2 else None
         if addr == func_addr:
             the_func = func
             break
     return the_func
 
 
-def extract_addrs(func_info):
-    addrs = set()
-    for start, end in func_info.values():
-        addrs.add(start)
-        addrs.add(end)
-    return addrs
+
+def get_function_addresses(proj, output_cg=False, path=None):
+    funcs_addrs = list()
+    cfg = proj.analyses.CFGFast()
+    for addr in cfg.functions:
+        f = cfg.functions[addr]
+        if not f.is_simprocedure and not f.is_syscall and not f.is_plt and not proj.is_hooked(addr):
+            funcs_addrs.append((f.name, addr))
+    if output_cg:
+        file_name_cg = proj.filename.split('/')[-1] + '.dot'
+        file_name_map = proj.filename.split('/')[-1] + '.map'
+        path = '.' if path is None else path
+        if not os.path.exists(path):
+            os.makedirs(path)
+        cg_path = os.path.join(path, file_name_cg)
+        map_path = os.path.join(path, file_name_map)
+        # output the function name to address mapping. Since in CG, only addresses are provided.
+        with open(map_path, 'w') as f:
+            for func, addr in funcs_addrs:
+                print(f'{func}:{addr}', file=f)
+        # output the CG as a dot file. Can use the "dot" command of Graphviz access.
+        dot = nx.nx_pydot.to_pydot(cfg.functions.callgraph)
+        dot.write(cg_path)
+    return funcs_addrs
 
 
-def apk_run(path, out=None, func_info=None, comprise=False):
+def apk_run(path, out=None, output_cg=False, comprise=False):
     perf = Performance()
     if out is None:
         result_dir = path.split('/')[-1].rstrip('.apk') + '_result'
@@ -303,7 +327,7 @@ def apk_run(path, out=None, func_info=None, comprise=False):
             os.makedirs(out)
     perf.start()
     apk, _, dex = AnalyzeAPK(path)
-    with apk.zip as zf:
+    with apk.zip as zf, tempfile.TemporaryDirectory() as tmpd:
         chosen_abi_dir = select_abi_dir(zf.namelist())
         if chosen_abi_dir is None:
             logger.debug(f'No ABI directories were found for .so file in {path}')
@@ -312,7 +336,8 @@ def apk_run(path, out=None, func_info=None, comprise=False):
         for n in zf.namelist():
             if n.endswith('.so') and n.startswith(chosen_abi_dir):
                 logger.debug(f'Start to analyze {n}')
-                with zf.open(n) as so_file, mp.Manager() as mgr:
+                so_file = zf.extract(n, path=tmpd)
+                with mp.Manager() as mgr:
                     returns = mgr.dict()
                     proj, jvm, jenv, dynamic_timeout = find_all_jni_functions(so_file, dex)
                     if proj is None:
@@ -320,19 +345,19 @@ def apk_run(path, out=None, func_info=None, comprise=False):
                         continue
                     if dynamic_timeout:
                         perf.add_dynamic_reg_timeout()
-                    global_refs = None
-                    if func_info is not None:
-                        global_refs = {
-                            'func_info': mgr.dict(func_info),
-                            'func_stack': mgr.list()
-                        }
-                        for addr in extract_addrs(func_info):
-                            proj.hook(addr, hook=cg_addr_hook)
+                    func_info = dict()
+                    funcs_addrs = get_function_addresses(proj, output_cg, out)
+                    for func, addr in funcs_addrs:
+                        proj.hook(addr, hook=cg_addr_hook)
+                        func_info.update({func:[addr]})
+                    global_refs = {
+                        'func_info': mgr.dict(func_info),
+                        'func_stack': mgr.list()
+                    }
                     perf.add_analyzed_so()
                     for jni_func, record in Record.RECORDS.items():
                         # clear func stack before each analysis
-                        if global_refs is not None:
-                            global_refs.get('func_stack')[:] = list()
+                        global_refs.get('func_stack')[:] = list()
                         # wrap the analysis with its own process to limit the
                         # analysis time.
                         p = mp.Process(target=analyze_jni_function,
@@ -368,11 +393,10 @@ def find_all_jni_functions(so_file, dex):
     # Mark whether the analysis for dynamic registration is timeout.
     dynamic_analysis_timeout = False
     try:
-        cle_loader = cle.loader.Loader(so_file, auto_load_libs=False)
+        proj = angr.Project(so_file, auto_load_libs=False)
     except Exception as e:
-        logger.warning(f'{so_file} cause CLE loader error: {e}')
+        logger.warning(f'{so_file} cause angr loading error: {e}')
     else:
-        proj = angr.Project(cle_loader)
         hookAllImportSymbols(proj)
         jvm_ptr, jenv_ptr = jni_env_prepare_in_object(proj)
         clean_records()

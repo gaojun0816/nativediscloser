@@ -352,18 +352,28 @@ class CallVoidMethodA(CallVoidMethod):
 
 
 class CallStaticVoidMethod(CallMethodBase):
-    pass
+    def run(self, env, _, method_ptr):
+        logger.debug(f'CallStaticVoidMethod SimP at {hex(self.state.addr)} invoked')
+        super().run(env, _, method_ptr)
 
 
 class CallStaticVoidMethodV(CallVoidMethod):
-    pass
+    def run(self, env, _, method_ptr):
+        logger.debug(f'CallStaticVoidMethodV SimP at {hex(self.state.addr)} invoked')
+        super().run(env, _, method_ptr)
 
 
 class CallStaticVoidMethodA(CallVoidMethod):
-    pass
+    def run(self, env, _, method_ptr):
+        logger.debug(f'CallStaticVoidMethodA SimP at {hex(self.state.addr)} invoked')
+        super().run(env, _, method_ptr)
 
 
 class CallObjectMethod(CallMethodBase):
+    def run(self, env, _, method_ptr):
+        logger.debug(f'CallObjectMethod SimP at {hex(self.state.addr)} invoked')
+        super().run(env, _, method_ptr)
+
     def get_return_value(self, method):
         # for complex code structure, method may not be able to parse.
         if method is None:
@@ -373,11 +383,15 @@ class CallObjectMethod(CallMethodBase):
 
 
 class CallObjectMethodV(CallObjectMethod):
-    pass
+    def run(self, env, _, method_ptr):
+        logger.debug(f'CallObjectMethodV SimP at {hex(self.state.addr)} invoked')
+        super().run(env, _, method_ptr)
 
 
 class CallObjectMethodA(CallObjectMethod):
-    pass
+    def run(self, env, _, method_ptr):
+        logger.debug(f'CallObjectMethodA SimP at {hex(self.state.addr)} invoked')
+        super().run(env, _, method_ptr)
 
 
 class CallStaticObjectMethod(CallObjectMethod):
