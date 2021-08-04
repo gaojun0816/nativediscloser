@@ -27,7 +27,7 @@ WAIT_TIME = 180
 DYNAMIC_ANALYSIS_TIME = 600
 
 # Directory for different ABIs, refer to: https://developer.android.com/ndk/guides/abis
-ABI_DIRS = ['lib/armeabi-v7a/', 'lib/armeabi/', 'lib/arm64-v8a/', 'lib/x86/', 'lib/x86_64/']
+ABI_DIRS = ['lib/armeabi-v7a/', 'lib/arm64-v8a/', 'lib/x86/', 'lib/x86_64/', 'lib/armeabi/', 'lib/mips/', 'lib/mips64/']
 FDROID_DIR = '../fdroid_crawler'
 NATIVE_FILE = os.path.join(FDROID_DIR, 'natives')
 # OUT_DIR = 'fdroid_result'
@@ -228,11 +228,18 @@ def select_abi_dir(dir_list):
 
 
 def get_return_address(state):
-    # TODO: check architecture to decide from where to retrieve return address.
     return_addr = None
-    # for ARM, get it from register, lr
-    if 'ARM' in state.arch.name:
+    arch = state.arch.name
+    # for ARM, ARM64, get it from lr (i.e., link register) register.
+    if 'ARMEL' in arch or 'AARCH64' in arch:
         return_addr = state.solver.eval(state.regs.lr)
+    # for MIPS, get it from ra (i.e., return address) register.
+    elif 'MIPS' in arch:
+        return_addr = state.solver.eval(state.regs.ra)
+    # for x86 or x86_64, the return address is stored on the stack which is pointed by the esp register.
+    elif 'X86' in arch or 'AMD64' in arch:
+        return_addr = state.memory.load(state.regs.esp, state.arch.bytes, endness=state.arch.memory_endness)
+        return_addr = state.solver.eval(return_addr)
     else:
         logger.warning(f'Retrieve return address of architecture {state.arch.name} has not been implemented!')
     return return_addr
