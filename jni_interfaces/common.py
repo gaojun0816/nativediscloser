@@ -36,6 +36,12 @@ class JNIProcedureBase(SimProcedure):
 
         return "".join(chars)
 
+    def create_field(self, obj, field, desc=""):
+        symb_name = desc if desc else 'field_value'
+        field_symbol = self.state.solver.BVS(symb_name, self.arch.bits)
+        # self.state.add_constraints(field_symbol == ref)
+        return field_symbol
+
     def create_java_class(self, cls_name, init=False, desc=None):
         ref = self.state.project.loader.extern_object.allocate()
         jcls = JavaClass(cls_name, init, desc)
@@ -61,8 +67,8 @@ class JNIProcedureBase(SimProcedure):
         self.state.globals[ref] = jfield
 
         field_symbol = self.state.solver.BVS('jfield_value', self.arch.bits)
-        self.state.add_constraints(jfield_symbol == ref)
-        return jfield_symbol
+        self.state.add_constraints(field_symbol == ref)
+        return field_symbol
 
     def get_ref(self, raw_ref):
         ref = self.state.solver.eval(raw_ref)

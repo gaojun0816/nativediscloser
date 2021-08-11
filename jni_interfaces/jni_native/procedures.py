@@ -8,6 +8,55 @@ from ..record import Record
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+class NewStringUTF(JPB):
+    def run(self, buff):
+        ret_symb = self.state.solver.BVS('jstring_from_buff', self.arch.bits)
+        return ret_symb
+
+class GetStringUTFChars(JPB):
+    def run(self, string, pIsCopy):
+        ret_symb = self.state.solver.BVS('buff_from_%s' % str(string), self.arch.bits)
+        return ret_symb
+
+class ReleaseStringUTFChars(JPB):
+    def run(self, string, pUtfChars):
+        return
+
+class GetArrayLength(JPB):
+    def run(self, array):
+        ret_symb = self.state.solver.BVS('length_of_%s' % str(array), self.arch.bits)
+        return ret_symb
+
+# ReleaseByteArrayElements
+
+class GetArrayElements(JPB):
+    def run(self, array, pIsCopy):
+        ret_symb = self.state.solver.BVS('elements_of_%s' % str(array), self.arch.bits)
+        return ret_symb
+
+class GetBooleanArrayElements(GetArrayElements):
+    pass
+
+class GetByteArrayElements(GetArrayElements):
+    pass
+
+class GetCharArrayElements(GetArrayElements):
+    pass
+
+class GetShortArrayElements(GetArrayElements):
+    pass
+
+class GetIntArrayElements(GetArrayElements):
+    pass
+
+class GetLongArrayElements(GetArrayElements):
+    pass
+
+class GetFloatArrayElements(GetArrayElements):
+    pass
+
+class GetDoubleArrayElements(GetArrayElements):
+    pass
 
 class GetClass(JPB):
     def run(self, env_ptr, cls_name_ptr):
@@ -51,7 +100,73 @@ class NewObjectV(NewRef):
 class NewObjectA(NewRef):
     pass
 
+class GetField(JPB):
+    def run(self, env, obj, field_ptr):
+        field = self.get_ref(field_ptr)
+        if field is None:
+            desc = 'field obtained via GetField which failed to parse fieldID'
+            return self.create_field(obj, None, desc=desc)
+        else:
+            return self.create_field(obj, field, desc="%s.%s" % (str(obj), field.name))
 
+class GetObjectField(GetField):
+    pass
+	
+class GetBooleanField(GetField):
+    pass
+	
+class GetByteField(GetField):
+    pass
+	
+class GetCharField(GetField):
+    pass
+	
+class GetShortField(GetField):
+    pass
+	
+class GetIntField(GetField):
+    pass
+	
+class GetLongField(GetField):
+    pass
+	
+class GetFloatField(GetField):
+    pass
+	
+class GetDoubleField(GetField):
+    pass
+
+class SetField(JPB):
+    def run(self, env, klass, fid, value):
+        print("SetField %s %s %s" %(klass, fid, value))
+
+class SetObjectField(SetField):
+    pass
+
+class SetBooleanField(SetField):
+    pass
+
+class SetByteField(SetField):
+    pass
+
+class SetCharField(SetField):
+    pass
+
+class SetShortField(SetField):
+    pass
+
+class SetIntField(SetField):
+    pass
+
+class SetLongField(SetField):
+    pass
+
+class SetFloatField(SetField):
+    pass
+
+class SetDoubleField(SetField):
+    pass
+	
 class GetObjectClass(JPB):
     def run(self, env, obj_ptr):
         obj = self.get_ref(obj_ptr)
@@ -115,14 +230,14 @@ class CallMethodBase(JPB):
     def run(self, env, _, method_ptr):
         method = self.get_ref(method_ptr)
         record = self.get_current_record()
+        return_value = self.get_return_value(method)
         # record could be None when CallMethod function called in JNI_OnLoad
         if record is not None:
             if method is None:
                 logger.warning(f'{self.__class__} received method pointer:' +\
                         f'{method_ptr} without corresponding method instance')
             else:
-                record.add_invokee(method, self.get_arguments_symbols(method.signature))
-        return_value = self.get_return_value(method)
+                record.add_invokee(method, self.get_arguments_symbols(method.signature), return_value, self.state.cond_hist)
         if return_value != None:
             return return_value
 
@@ -163,6 +278,7 @@ class CallMethodBase(JPB):
                 i += 1
             else:
                 raise ValueError('Wrong method signature format: "%s"' % args_signature)
+        args_symbs.insert(0, self.get_argument_value(i)) # Add value for potential caller object
         return args_symbs
 
     def get_argument_value(self, arg_index):
@@ -208,7 +324,7 @@ class CallReturnObjectMethod(CallMethodBase):
         if method is None:
             return None
         rtype = method.get_return_type().strip('L;').replace('/', '.')
-        return self.create_java_class(rtype, init=True, desc="return_#1")
+        return self.create_java_class(rtype, init=True, desc="return_value")
 
 # Actual Call*Method* SimProcedure
 
