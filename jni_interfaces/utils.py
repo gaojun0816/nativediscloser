@@ -2,21 +2,25 @@ import sys
 import re
 import logging
 import traceback
+from base64 import b64encode
 from claripy import BVS
 from angr.sim_type import register_types, parse_type
-from angr.exploration_techniques import LengthLimiter
+from angr.exploration_techniques import LengthLimiter, LoopSeer
 
 from . import JNI_PROCEDURES
 from .common import NotImplementedJNIFunction, JavaClass
 from .jni_invoke import jni_invoke_interface as jvm
 from .jni_native import jni_native_interface as jenv
 from .record import Record, RecordNotFoundError
+from .conditions_history import ConditionsHistoryUpdater
+from ast_protobuf.ast_serialization import convertAst
 
 JNI_LOADER = 'JNI_OnLoad'
 # value for "LengthLimiter" to limit the length of path a state goes through.
 # refer to: https://docs.angr.io/core-concepts/pathgroups
-MAX_LENGTH = 500000
-DYNAMIC_ANALYSIS_LENGTH = 100000
+MAX_LENGTH = 50000
+DYNAMIC_ANALYSIS_LENGTH = 1000
+MAX_LOOP_ITER = 10
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -145,7 +149,7 @@ def get_prepared_jni_onload_state(proj, jvm_ptr, jenv_ptr, dex=None):
 
 
 def analyze_jni_function(func_addr, proj, jvm_ptr, jenv_ptr, dex=None, returns=None, global_refs=None):
-    func_params, updates = get_jni_function_params(proj, func_addr, jenv_ptr)
+    func_params, updates, constraints = get_jni_function_params(proj, func_addr, jenv_ptr)
     state = proj.factory.call_state(func_addr, *func_params)
     state.globals['func_ptr'] = func_addr
     if global_refs is not None:
@@ -153,16 +157,35 @@ def analyze_jni_function(func_addr, proj, jvm_ptr, jenv_ptr, dex=None, returns=N
             state.globals[k] = v
     for k, v in updates.items():
         state.globals[k] = v
+    for c in constraints:
+        state.add_constraints(c)
     jni_env_prepare_in_state(state, jvm_ptr, jenv_ptr, dex)
     tech = LengthLimiter(MAX_LENGTH)
     simgr = proj.factory.simgr(state)
     simgr.use_technique(tech)
+
+    cfg = proj.analyses.CFGFast(normalize=True, function_starts=[state.addr])
+    tech = LoopSeer(cfg=cfg, bound=MAX_LOOP_ITER, limit_concrete_loops=False)
+    simgr.use_technique(tech)
+
+    simgr.use_technique(ConditionsHistoryUpdater())
+
+    record = Record.RECORDS.get(func_addr)
+    if record is not None:
+        print("Native method executed %s, %s" % (record.method_name, record.signature))
     try:
         simgr.run()
     except Exception as e:
         logger.warning(f'Analysis JNI function failed: {e}')
         traceback.print_exc()
-    # for multiprocess running. param "returns" should be a
+
+    if(len(simgr.stashes['cut'])>0):
+        logger.warning(f'LengthLimiter has triggered during the execution of function @0x%x' % func_addr)
+    for st in simgr.stashes['deadended']:
+        Record.RECORDS.get(func_addr).add_return_value(st.regs.r0, guard_condition=st.cond_hist)
+    print("===========================================")
+
+    # for multiprocess running. param "returns" should be a        
     # multiprocessing.Manager().dict()
     if returns is not None:
         invokees = Record.RECORDS.get(func_addr).get_invokees()
@@ -171,6 +194,7 @@ def analyze_jni_function(func_addr, proj, jvm_ptr, jenv_ptr, dex=None, returns=N
 
 
 def get_jni_function_params(proj, func_addr, jenv_ptr):
+    constraints = []
     record = Record.RECORDS.get(func_addr)
     if record is None:
         raise RecordNotFoundError('Relevant JNI function record not found!')
@@ -214,6 +238,7 @@ def get_jni_function_params(proj, func_addr, jenv_ptr):
                 'D': BVS('double_value', proj.arch.bits),
                 '[D': BVS('double_array', proj.arch.bits),
         }
+        param_nb = 0
         for p in plist:
             param = symbol_values.get(p)
             if param is None:
@@ -228,10 +253,14 @@ def get_jni_function_params(proj, func_addr, jenv_ptr):
                     jclass = JavaClass(cls_name, init=True)
                 if p.startswith('['):
                     jclass.is_array = True
-                param = proj.loader.extern_object.allocate()
-                state_updates.update({param: jclass})
+                ref = proj.loader.extern_object.allocate()
+                obj_symbol = BVS("param_#%i" % (param_nb+1), proj.arch.bits)
+                constraints.append(obj_symbol == ref)
+                state_updates.update({ref: jclass})
+                param = obj_symbol
             params.append(param)
-    return params, state_updates
+            param_nb += 1
+    return params, state_updates, constraints
 
 
 def parse_params_from_sig(signature):
@@ -285,17 +314,24 @@ def register_jni_relevant_data_type():
 
 
 def print_records(fname=None):
-    header = 'invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
+    header_invokee = '# 0, invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
              'invoker_static_export, ' +\
-             'invokee_cls, invokee_method, invokee_signature, invokee_static, ' +\
-             'exit_addr, invokee_desc'
+             'invokee_cls, invokee_method, invokee_signature, invokee_static, exit_addr, ' +\
+             'argument_expression_list, return_value_symbol, ' +\
+             'condition_bits, condition_n_bits, condition_expr, ' +\
+             'invokee_desc'
+    header_return_value = '# 1, invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
+             'invoker_static_export, ' +\
+             'return_value_expression, condition_bits, condition_n_bits, condition_expr, ' +\
+             'invokee_desc'
     if len(Record.RECORDS) > 0:
         f = None
         if fname is None:
             f = sys.stdout
         else:
             f = open(fname, 'w')
-        print(header, file=f)
+        print(header_invokee, file=f)
+        print(header_return_value, file=f)
         for _, r in Record.RECORDS.items():
             print(r, file=f)
         if fname is not None:
