@@ -322,7 +322,7 @@ def get_function_addresses(proj, output_cg=False, path=None):
         # output the CG as a dot file. Can use the "dot" command of Graphviz access.
         dot = nx.nx_pydot.to_pydot(cfg.functions.callgraph)
         dot.write(cg_path)
-    return funcs_addrs
+    return (funcs_addrs, cfg)
 
 
 def apk_run(path, out=None, output_cg=False, comprise=False):
@@ -353,7 +353,7 @@ def apk_run(path, out=None, output_cg=False, comprise=False):
                     if dynamic_timeout:
                         perf.add_dynamic_reg_timeout()
                     func_info = dict()
-                    funcs_addrs = get_function_addresses(proj, output_cg, out)
+                    (funcs_addrs, cfg) = get_function_addresses(proj, output_cg, out)
                     for func, addr in funcs_addrs:
                         proj.hook(addr, hook=cg_addr_hook)
                         func_info.update({func:[addr]})
@@ -368,7 +368,7 @@ def apk_run(path, out=None, output_cg=False, comprise=False):
                         # wrap the analysis with its own process to limit the
                         # analysis time.
                         p = mp.Process(target=analyze_jni_function,
-                                args=(*(jni_func, proj, jvm, jenv, dex, returns, global_refs),))
+                                args=(*(jni_func, proj, jvm, jenv, cfg, dex, returns, global_refs),))
                         p.start()
                         perf.add_analyzed_func()
                         # For analysis of each .so file, we wait for 3mins at most.
@@ -378,10 +378,10 @@ def apk_run(path, out=None, output_cg=False, comprise=False):
                             p.terminate()
                             p.join()
                             logger.warning(f'Timeout when analyzing {n}')
-                    for addr, invokees in returns.items():
+                    for addr, elems in returns.items():
                         record = Record.RECORDS.get(addr)
-                        for invokee in invokees:
-                            record.add_invokee(invokee)
+                        for elem in elems:
+                            record.add_elem(elem)
                     file_name = n.split('/')[-1] + '.result'
                     print_records(os.path.join(out, file_name))
     perf.end()

@@ -73,6 +73,14 @@ class Record:
         self._return_values = None # list of return value by current native method
         Record.RECORDS.update({func_ptr: self}) # add itself to global record
 
+    def add_elem(self, elem):
+        if isinstance(elem, Invokee):
+            self.add_invokee(elem)
+        elif isinstance(elem, ReturnValue):
+            self.add_return_value(elem)
+        else:
+            raise TypeError("Invalid type for elem")
+        
     def add_invokee(self, param, exit=None, arguments=[], return_value=None, guard_condition=None):
         """Add the Java invokee method information
         The invokee is a Java method invoked by current native function.
@@ -94,8 +102,12 @@ class Record:
             self._invokees = list()
         self._invokees.append(invokee)
 
-    def add_return_value(self, return_value, guard_condition=None):
-        return_value = ReturnValue(return_value, guard_condition)
+    def add_return_value(self, param, guard_condition=None):
+        return_value = None
+        if isinstance(param, ReturnValue):
+            return_value = param
+        else:
+            return_value = ReturnValue(param, guard_condition)
         if self._return_values is None:
             self._return_values = list()
         self._return_values.append(return_value)
@@ -111,6 +123,9 @@ class Record:
 
     def get_invokees(self):
         return self._invokees
+
+    def get_return_values(self):
+        return self._return_values
 
     def __str__(self):
         result = ''
