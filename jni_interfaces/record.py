@@ -130,14 +130,14 @@ class Record:
     def __str__(self):
         result = ''
         invoker = f'{self.cls}, {self.method_name}, {self.signature}, {self.symbol_name}, {self.static_export}'
-        if self._invokees is None:
-            result = invoker
-        else:
+        if self._invokees is None and self._return_values is None:
+            result = '0, ' + invoker
+        if self._invokees is not None:
             for invokee in self._invokees:
-                result += '0, ' + invoker + ', ' + str(invokee) + '\n'
+                result += '1, ' + invoker + ', ' + str(invokee) + '\n'
         if self._return_values is not None:
             for return_value in self._return_values:
-                result += '1, ' + invoker + ', ' + str(return_value) + '\n'
+                result += '2, ' + invoker + ', ' + str(return_value) + '\n'
 
         return result.strip()
 

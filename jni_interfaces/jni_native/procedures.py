@@ -287,7 +287,7 @@ class CallMethodBase(JPB):
                 i += 1
             else:
                 raise ValueError('Wrong method signature format: "%s"' % args_signature)
-        args_symbs.insert(0, self.get_argument_value(i)) # Add value for potential caller object
+        args_symbs.insert(0, self.get_argument_value(-2)) # Add value for potential caller object
         return args_symbs
 
     def get_argument_value(self, arg_index):

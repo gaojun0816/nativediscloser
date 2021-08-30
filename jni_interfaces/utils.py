@@ -314,13 +314,15 @@ def register_jni_relevant_data_type():
 
 
 def print_records(fname=None):
-    header_invokee = '# 0, invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
+    no_result_header = '# 0, invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
+             'invoker_static_export'
+    header_invokee = '# 1, invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
              'invoker_static_export, ' +\
              'invokee_cls, invokee_method, invokee_signature, invokee_static, exit_addr, ' +\
              'argument_expression_list, return_value_symbol, ' +\
              'condition_bits, condition_n_bits, condition_expr, ' +\
              'invokee_desc'
-    header_return_value = '# 1, invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
+    header_return_value = '# 2, invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
              'invoker_static_export, ' +\
              'return_value_expression, condition_bits, condition_n_bits, condition_expr, ' +\
              'invokee_desc'
@@ -330,6 +332,7 @@ def print_records(fname=None):
             f = sys.stdout
         else:
             f = open(fname, 'w')
+        print(no_result_header, file=f)
         print(header_invokee, file=f)
         print(header_return_value, file=f)
         for _, r in Record.RECORDS.items():
