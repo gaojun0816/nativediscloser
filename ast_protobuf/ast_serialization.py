@@ -112,6 +112,12 @@ def is_ast_op_node(ast):
 def _convertAst(ast):
     if isinstance(ast, claripy.ast.Base):
 
+        # Manually treated for compatibility issues with protobuf
+        if ast.op == "And":
+            ast.op = "__and__"
+        if ast.op == "Or":
+            ast.op = "__or__"
+
         # op node
         if is_ast_op_node(ast):
             node = None
@@ -133,32 +139,35 @@ def _convertAst(ast):
             else:
                 raise ValueError("op not found for ast: " + str(ast))
 
-            i = 1
-            for arg in ast.args:
-                argValue = _convertAst(arg)
-                if not isinstance(arg, claripy.ast.Base):
-                    if type(arg).__name__ == "RM": # if remainder type
-                        setattr(node, "arg%i"%i, str(argValue))
-                    else:
-                        setattr(node, "arg%i"%i, argValue)
-                else:
-                    arg_typename = argValue.__class__.__name__
-                    if isOperatorName(arg_typename): # If operator
-                        SupArgCls = getattr(argValue, "return").__class__
-                        supArgNode = SupArgCls()
-                        subSupArgNode = getattr(supArgNode, "op_"+arg_typename)
-                        subSupArgNode.CopyFrom(argValue)
-
-                        subNode = getattr(node, "arg%i"%i)
-                        subNode.CopyFrom(supArgNode)
-                    else: # If BV, FP, String, VS
-                        subNode = getattr(node, "arg%i"%i)
-                        if isinstance(argValue, ast_pb2.IfBlock): # If "IfBlock"
-                            subNode.node_IfBlock.CopyFrom(argValue)
+            try:
+                i = 1
+                for arg in ast.args:
+                    argValue = _convertAst(arg)
+                    if not isinstance(arg, claripy.ast.Base):
+                        if type(arg).__name__ == "RM": # if remainder type
+                            setattr(node, "arg%i"%i, str(argValue))
                         else:
-                            subNode.CopyFrom(argValue)
+                            setattr(node, "arg%i"%i, argValue)
+                    else:
+                        arg_typename = argValue.__class__.__name__
+                        if isOperatorName(arg_typename): # If operator
+                            SupArgCls = getattr(argValue, "return").__class__
+                            supArgNode = SupArgCls()
+                            subSupArgNode = getattr(supArgNode, "op_"+arg_typename)
+                            subSupArgNode.CopyFrom(argValue)
 
-                i += 1
+                            subNode = getattr(node, "arg%i"%i)
+                            subNode.CopyFrom(supArgNode)
+                        else: # If BV, FP, String, VS
+                            subNode = getattr(node, "arg%i"%i)
+                            if isinstance(argValue, ast_pb2.IfBlock): # If "IfBlock"
+                                subNode.node_IfBlock.CopyFrom(argValue)
+                            else:
+                                subNode.CopyFrom(argValue)
+
+                    i += 1
+            except AttributeError:
+                print("WARNING: missing arguments (TODO): " + str(ast.args[i-1:]))
 
             return node
 
