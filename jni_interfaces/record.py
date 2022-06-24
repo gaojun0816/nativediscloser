@@ -52,7 +52,40 @@ class ReturnValue:
     def __str__(self):
         s = get_str_from_symb_expr(self.return_value)
         s += f', {self.guard_condition.bits}, {self.guard_condition.n_bits}, '
-        s += "\"" + ", ".join([get_str_from_symb_expr(expr) for expr in self.guard_condition.cond]) + "\""    
+        s += "\"" + ", ".join([get_str_from_symb_expr(expr) for expr in self.guard_condition.cond]) + "\""
+        return s
+
+class GetField:
+    def __init__(self, is_static, obj, classname, field_name, guard_condition):
+        self.is_static = is_static
+        self.obj = obj
+        self.classname = classname
+        self.field_name = field_name
+        self.guard_condition = guard_condition
+
+    def __str__(self):
+        s = f'{self.is_static}, '
+        s += get_str_from_symb_expr(self.obj)
+        s += f', {self.classname}, {self.field_name}, {self.guard_condition.bits}, {self.guard_condition.n_bits}, '
+        s += "\"" + ", ".join([get_str_from_symb_expr(expr) for expr in self.guard_condition.cond]) + "\""
+        return s
+
+class SetField:
+    def __init__(self, is_static, obj, classname, field_name, new_value, guard_condition):
+        self.is_static = is_static
+        self.classname = classname
+        self.obj = obj
+        self.field_name = field_name
+        self.new_value = new_value
+        self.guard_condition = guard_condition
+
+    def __str__(self):
+        s = f'{self.is_static}, '
+        s += get_str_from_symb_expr(self.obj)
+        s += f', {self.classname}, {self.field_name}, '
+        s += get_str_from_symb_expr(self.new_value)
+        s += f', {self.guard_condition.bits}, {self.guard_condition.n_bits}, '
+        s += "\"" + ", ".join([get_str_from_symb_expr(expr) for expr in self.guard_condition.cond]) + "\""
         return s
 
 class Record:
@@ -71,6 +104,8 @@ class Record:
         self.static_export = static_export
         self._invokees = None # list of method invoked by current native method
         self._return_values = None # list of return value by current native method
+        self._get_fields = None # list of field get by the current native method
+        self._set_fields = None # list of field set by the current native method
         Record.RECORDS.update({func_ptr: self}) # add itself to global record
 
     def add_elem(self, elem):
@@ -78,6 +113,10 @@ class Record:
             self.add_invokee(elem)
         elif isinstance(elem, ReturnValue):
             self.add_return_value(elem)
+        elif isinstance(elem, GetField):
+            self.add_get_field(elem)
+        elif isinstance(elem, SetField):
+            self.add_set_field(elem)
         else:
             raise TypeError("Invalid type for elem")
         
@@ -112,6 +151,26 @@ class Record:
             self._return_values = list()
         self._return_values.append(return_value)
 
+    def add_get_field(self, param, obj=None, classname=None, field_name="", guard_condition=None):
+        get_field = None
+        if isinstance(param, GetField):
+            get_field = param
+        else:
+            get_field = GetField(param, obj, classname, field_name, guard_condition)
+        if self._get_fields is None:
+            self._get_fields = list()
+        self._get_fields.append(get_field)
+
+    def add_set_field(self, param, obj=None, classname=None, field_name="", new_value=None, guard_condition=None):
+        set_field = None
+        if isinstance(param, SetField):
+            set_field = param
+        else:
+            set_field = SetField(param, obj, classname, field_name, new_value, guard_condition)
+        if self._set_fields is None:
+            self._set_fields = list()
+        self._set_fields.append(set_field)
+
     def is_invoker(self):
         return self._invokees is not None
 
@@ -127,10 +186,16 @@ class Record:
     def get_return_values(self):
         return self._return_values
 
+    def get_get_fields(self):
+        return self._get_fields
+
+    def get_set_fields(self):
+        return self._set_fields
+
     def __str__(self):
         result = ''
         invoker = f'{self.cls}, {self.method_name}, {self.signature}, {self.symbol_name}, {self.static_export}'
-        if self._invokees is None and self._return_values is None:
+        if self._invokees is None and self._return_values is None and self._get_fields is None and self._set_fields is None:
             result = '0, ' + invoker
         if self._invokees is not None:
             for invokee in self._invokees:
@@ -138,6 +203,12 @@ class Record:
         if self._return_values is not None:
             for return_value in self._return_values:
                 result += '2, ' + invoker + ', ' + str(return_value) + '\n'
+        if self._get_fields is not None:
+            for get_field in self._get_fields:
+                result += '3, ' + invoker + ', ' + str(get_field) + '\n'
+        if self._set_fields is not None:
+            for set_field in self._set_fields:
+                result += '4, ' + invoker + ', ' + str(set_field) + '\n'
 
         return result.strip()
 

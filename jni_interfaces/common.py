@@ -2,6 +2,7 @@ import re
 import logging
 import itertools
 from angr import SimProcedure
+from .record import Record
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -35,6 +36,30 @@ class JNIProcedureBase(SimProcedure):
             chars.append(chr(solved_str))
 
         return "".join(chars)
+
+    def set_class_field(self, class_name, field_name, value):
+        return self.set_object_field("##class##"+class_name, field_name, value)
+
+    def get_class_field(self, class_name, field_name):
+        return self.get_object_field("##class##"+class_name, field_name)
+
+    def set_object_field(self, obj_symb, field_name, new_value):
+        (obj, old_value) = self.get_object_field(obj_symb, field_name) # Ensure the creation of the field
+        obj[field_name] = new_value
+        return old_value
+
+    def get_object_field(self, obj_symb, field_name):
+        obj = self.create_java_object(obj_symb)
+        if field_name not in obj:
+            # TODO: Use the type of the field for typing of the symbol
+            obj[field_name] = self.state.solver.BVS("##field##%s" % field_name, self.arch.bits)
+        return (obj, obj[field_name])
+
+    def create_java_object(self, obj_symb):
+        obj_symb_str = str(obj_symb)
+        if obj_symb_str not in self.state.globals:
+            self.state.globals[obj_symb_str] = {}
+        return self.state.globals[obj_symb_str]
 
     def create_field(self, obj, field, desc=""):
         symb_name = desc if desc else 'field_value'
@@ -73,6 +98,10 @@ class JNIProcedureBase(SimProcedure):
     def get_ref(self, raw_ref):
         ref = self.state.solver.eval(raw_ref)
         return self.state.globals.get(ref)
+
+    def get_current_record(self):
+        func_ptr = self.state.globals.get('func_ptr')
+        return Record.RECORDS.get(func_ptr)
 
 
 class NotImplementedJNIFunction(JNIProcedureBase):

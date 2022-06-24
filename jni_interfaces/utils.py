@@ -189,8 +189,17 @@ def analyze_jni_function(func_addr, proj, jvm_ptr, jenv_ptr, cfg, dex=None, retu
     if returns is not None:
         invokees = Record.RECORDS.get(func_addr).get_invokees()
         return_values = Record.RECORDS.get(func_addr).get_return_values()
-        if invokees is not None and return_values is not None:
-            returns.update({func_addr: invokees+return_values})
+        get_fields = Record.RECORDS.get(func_addr).get_get_fields()
+        set_fields = Record.RECORDS.get(func_addr).get_set_fields()
+        if invokees is None:
+            invokees = []
+        if return_values is None:
+            return_values = []
+        if get_fields is None:
+            get_fields = []
+        if set_fields is None:
+            set_fields = []
+        returns.update({func_addr: invokees+return_values+get_fields+set_fields})
 
 
 def get_jni_function_params(proj, func_addr, jenv_ptr):
@@ -207,11 +216,14 @@ def get_jni_function_params(proj, func_addr, jenv_ptr):
     jclass = JavaClass(record.cls)
     if record.static_method:
         jclass.init = True
-    ref = proj.loader.extern_object.allocate()
     # The second hidden parameter is either a jclass or jobject of the current
     # Java class where the native method lives. If it is a static method in
     # Java side, it will be a jclass otherwise a jobject.
-    params.append(ref)
+    ref = proj.loader.extern_object.allocate()
+    obj_symbol = BVS("param_#0", proj.arch.bits)
+    constraints.append(obj_symbol == ref)
+    state_updates.update({ref: jclass})
+    params.append(obj_symbol)
     state_updates.update({ref: jclass})
     # prepare for the none hidden parameters
     plist = None
@@ -323,9 +335,14 @@ def print_records(fname=None):
              'condition_bits, condition_n_bits, condition_expr, ' +\
              'invokee_desc'
     header_return_value = '# 2, invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
-             'invoker_static_export, ' +\
-             'return_value_expression, condition_bits, condition_n_bits, condition_expr, ' +\
-             'invokee_desc'
+             'invoker_static_export, return_value_expression, ' +\
+             'condition_bits, condition_n_bits, condition_expr'
+    header_get_field  = '# 3, invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
+                        'is_static, obj_ptr, classname, field_name, ' +\
+                        'condition_bits, condition_n_bits, condition_expr'
+    header_set_field  = '# 4, invoker_cls, invoker_method, invoker_signature, invoker_symbol, ' +\
+                        'is_static, obj_ptr, classname, field_name, new_value, ' +\
+                        'condition_bits, condition_n_bits, condition_expr'
     if len(Record.RECORDS) > 0:
         f = None
         if fname is None:
@@ -335,6 +352,8 @@ def print_records(fname=None):
         print(no_result_header, file=f)
         print(header_invokee, file=f)
         print(header_return_value, file=f)
+        print(header_get_field, file=f)
+        print(header_set_field, file=f)
         for _, r in Record.RECORDS.items():
             print(r, file=f)
         if fname is not None:

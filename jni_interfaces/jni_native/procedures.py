@@ -61,7 +61,7 @@ class GetDoubleArrayElements(GetArrayElements):
 class GetClass(JPB):
     def run(self, env_ptr, cls_name_ptr):
         cls_name = self.load_string_from_memory(cls_name_ptr)
-        return self.create_java_class(cls_name)
+        return self.create_java_class(cls_name.replace('/', '.'))
 
 
 class DefineClass(GetClass):
@@ -101,76 +101,182 @@ class NewObjectA(NewRef):
     pass
 
 class GetField(JPB):
+    def is_static(self):
+        return False
     def run(self, env, obj, field_ptr):
+        record = self.get_current_record()
         field = self.get_ref(field_ptr)
         if field is None:
-            desc = 'field obtained via GetField which failed to parse fieldID'
-            return self.create_field(obj, None, desc=desc)
+            logger.warning(f"Field not parsed during JNI GetField function. Event can't be correctly generated.")
+            (_, output_symbol) = self.get_object_field(obj, "fid#%s" % field_ptr)
+            return output_symbol
         else:
-            return self.create_field(obj, field, desc="%s.%s" % (str(obj), field.name))
+            output_symbol = None
+            cls = self.get_ref(obj)
+            if not self.is_static():
+                (_, output_symbol) = self.get_object_field(obj, field.name)
+                if cls is None:
+                    logger.warning(f"Class not parsed during JNI GetField function. Event can't be correctly generated.")
+                    return output_symbol
+            else:
+                if cls is None:
+                    logger.warning(f"Class not parsed during JNI GetField function. Event can't be correctly generated.")
+                    (_, output_symbol) = self.get_class_field("not_parsed", field.name)
+                    return output_symbol
+                else:
+                    (_, output_symbol) = self.get_class_field(cls.name, field.name)
 
+            record.add_get_field(self.is_static(), obj, cls.name, field.name, self.state.cond_hist)
+            return output_symbol
+
+class GetStaticField(GetField):
+    def is_static(self):
+        return True
+        
 class GetObjectField(GetField):
     pass
-	
+
+class GetStaticObjectField(GetStaticField):
+    pass
+
 class GetBooleanField(GetField):
     pass
-	
+
+class GetStaticBooleanField(GetStaticField):
+    pass
+
 class GetByteField(GetField):
     pass
-	
+
+class GetStaticByteField(GetStaticField):
+    pass
+
 class GetCharField(GetField):
     pass
-	
+
+class GetStaticCharField(GetStaticField):
+    pass
+
 class GetShortField(GetField):
     pass
-	
+
+class GetStaticShortField(GetStaticField):
+    pass
+
 class GetIntField(GetField):
     pass
-	
+
+class GetStaticIntField(GetStaticField):
+    pass
+
 class GetLongField(GetField):
     pass
-	
+
+class GetStaticLongField(GetStaticField):
+    pass
+
 class GetFloatField(GetField):
     pass
-	
+
+class GetStaticFloatField(GetStaticField):
+    pass
+
 class GetDoubleField(GetField):
     pass
 
+class GetStaticDoubleField(GetStaticField):
+    pass
+
 class SetField(JPB):
-    def run(self, env, klass, fid, value):
-        print("SetField %s %s %s" %(klass, fid, value))
+    def is_static(self):
+        return False
+    def run(self, env, obj, field_ptr, value):
+        record = self.get_current_record()
+        field = self.get_ref(field_ptr)
+        if field is None:
+            logger.warning(f"Field not parsed during JNI SetField function. Event can't be correctly generated.")
+            self.set_object_field(obj, "fid#%s" % field_ptr, value)
+        else:
+            cls = self.get_ref(obj)
+            if not self.is_static():
+                obj_ptr_or_classname = obj
+                self.set_object_field(obj, field.name, value)
+                if cls is None:
+                    logger.warning(f"Class not parsed during JNI SetField function. Event can't be correctly generated.")
+                    return
+            else:
+                if cls is None:
+                    logger.warning(f"Class not parsed during JNI SetField function. Event can't be correctly generated.")
+                    self.set_class_field("not_parsed", field.name, value)
+                    return
+                self.set_class_field(cls.name, field.name, value)
+                
+            record.add_set_field(self.is_static(), obj, cls.name, field.name, value, self.state.cond_hist)
+
+
+class SetStaticField(SetField):
+    def is_static(self):
+        return True
 
 class SetObjectField(SetField):
+    pass
+
+class SetStaticObjectField(SetStaticField):
     pass
 
 class SetBooleanField(SetField):
     pass
 
+class SetStaticBooleanField(SetStaticField):
+    pass
+
 class SetByteField(SetField):
+    pass
+
+class SetStaticByteField(SetStaticField):
     pass
 
 class SetCharField(SetField):
     pass
 
+class SetStaticCharField(SetStaticField):
+    pass
+
 class SetShortField(SetField):
+    pass
+
+class SetStaticShortField(SetStaticField):
     pass
 
 class SetIntField(SetField):
     pass
 
+class SetStaticIntField(SetStaticField):
+    pass
+
 class SetLongField(SetField):
+    pass
+
+class SetStaticLongField(SetStaticField):
     pass
 
 class SetFloatField(SetField):
     pass
 
+class SetStaticFloatField(SetStaticField):
+    pass
+
 class SetDoubleField(SetField):
     pass
-	
+
+class SetStaticDoubleField(SetStaticField):
+    pass
+
 class GetObjectClass(JPB):
     def run(self, env, obj_ptr):
         obj = self.get_ref(obj_ptr)
         if obj is None:
+            logger.warning(f"Object not parsed during JNI GetObjectClass function.")
             desc = 'jclass obtained via "GetObjectClass" and cannot be parsed'
             return self.create_java_class(None, desc=desc)
         else:
@@ -211,21 +317,6 @@ class GetStaticFieldID(GetFieldID):
     pass
 
 
-class GetObjectField(JPB):
-    def run(self, env_ptr, _, field_ptr):
-        field = self.get_ref(field_ptr)
-        if field is None:
-            desc = 'jobject obtained via GetObjectField which failed to parse'
-            return self.create_java_class(None, init=True, desc=desc)
-        else:
-            return self.create_java_class(field.ftype.strip('L;').replace('/', '.'),
-                                      init=True)
-
-
-class GetStaticObjectField(GetObjectField):
-    pass
-
-
 class CallMethodBase(JPB):
     def run(self, env, _, method_ptr):
         logger.debug(f'{self.__class__.__name__} SimP at {hex(self.state.addr)} is invoked')
@@ -242,10 +333,6 @@ class CallMethodBase(JPB):
                 record.add_invokee(method, cur_func, self.get_arguments_symbols(method.signature), return_value, self.state.cond_hist)
         if return_value != None:
             return return_value
-
-    def get_current_record(self):
-        func_ptr = self.state.globals.get('func_ptr')
-        return Record.RECORDS.get(func_ptr)
 
     def get_cur_func(self):
         cur_func = None
